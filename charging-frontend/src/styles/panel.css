@@ -1,0 +1,123 @@
+/* panel.css - 控制面板 + 图例 + 全局布局样式文件（优化版） */
+
+/* ================= 图例模块 ================= */
+
+/* 图例容器列表样式 */
+.task-legend ul {
+  list-style: none;
+  padding: 0;
+  margin-top: 0.5rem;
+}
+
+/* 图例每一项排版与间距 */
+.task-legend li {
+  display: flex;
+  align-items: center;
+  margin-bottom: 0.25rem;
+  font-size: 0.95rem;
+  color: #333;
+}
+
+/* 图例图标：通用基础样式 */
+.legend-square,
+.legend-circle {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  margin-right: 8px;
+  border: 1px solid black;
+}
+
+.legend-square {
+  border-radius: 2px;
+}
+
+.legend-circle {
+  border-radius: 50%;
+}
+
+/* ================= 全局排版 ================= */
+
+:root {
+  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+
+  color: #213547;
+  background-color: #ffffff;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background-color: #f2f2f2;
+  color: #333;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* ================= 主标题与按钮 ================= */
+
+h1, h2, h3 {
+  margin: 0.5rem 0;
+  font-weight: 600;
+  color: #333;
+}
+
+button {
+  border-radius: 8px;
+  border: 1px solid #ccc;
+  padding: 0.6em 1.2em;
+  font-size: 1em;
+  font-weight: 500;
+  font-family: inherit;
+  background-color: #ffffff;
+  color: #333;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+button:hover {
+  background-color: #f0f0f0;
+  border-color: #646cff;
+}
+
+button:focus,
+button:focus-visible {
+  outline: 3px solid #a0a0ff;
+}
+
+/* ================= 控制区域面板布局 ================= */
+
+.tick-player,
+.info-panel,
+.task-legend,
+.selector-panel {
+  margin-top: 1rem;
+  padding: 1rem;
+  background-color: #fff;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+}
+
+.selector-panel label {
+  margin-right: 1rem;
+  font-weight: 500;
+}
+
+.bottom-panel {
+  display: flex;
+  justify-content: space-around;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-top: 1rem;
+  width: 100%;
+  max-width: 900px;
+}

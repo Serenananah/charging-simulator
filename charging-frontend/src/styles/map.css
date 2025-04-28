@@ -1,0 +1,88 @@
+/* 🌍 整体容器居中显示 */
+#root {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 1rem;
+  text-align: center;
+  font-family: "Segoe UI", sans-serif;
+}
+
+/* 🗺️ 地图容器 */
+.map-container {
+  display: inline-block;
+  background-color: #f9f9f9;
+  border: 2px solid #ccc;
+  border-radius: 8px;
+  padding: 10px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+  margin-top: 1rem;
+}
+
+/* 🔳 网格线条 */
+.grid-line {
+  stroke: #ddd;
+  stroke-width: 1;
+}
+
+/* 🤖 正常机器人（科技灰蓝） */
+.robot {
+  fill: #0984e3;
+  stroke: #34495e;
+  stroke-width: 1;
+  transition: all 0.3s;
+}
+
+/* 🤖 低电量机器人（温暖橙） */
+.robot-low {
+  fill: #f4a261;
+  stroke: #e98b3b;
+  stroke-width: 1;
+  transition: all 0.3s;
+}
+
+/* 鼠标悬停机器人时微微放大 */
+.robot:hover, .robot-low:hover {
+  transform: scale(1.1);
+  transform-origin: center center;
+}
+
+/* ⚡ 充电桩（薄荷绿） */
+.station {
+  fill: #6fcf97;
+  stroke: #45b37e;
+  stroke-width: 1.5;
+}
+
+/* 🅿️ 停车位（中性浅灰） */
+.parking-spot {
+  fill: #bdc3c7;
+  stroke: #95a5a6;
+  stroke-width: 1.5;
+}
+
+/* 🧱 障碍物（深灰） */
+.obstacle {
+  fill: #808080;
+  opacity: 0.85;
+  stroke: #696969;
+  stroke-width: 0.5;
+}
+
+.robot-text {
+  font-size: 10px;
+  fill: #333;
+  text-anchor: middle;
+}
+
+text {
+  paint-order: stroke;
+  stroke: white;
+  stroke-width: 0.5px;
+}
+
+/* 图例小方块通用样式 */
+.legend-symbol {
+  width: 16px;
+  height: 16px;
+  display: inline-block;
+}
