@@ -14,11 +14,13 @@ from environment import LOW_BATTERY_THRESHOLD, CHARGE_TRANSFER
     time: 当前时间步
     grid: 当前地图网格
     chargers: 充电桩位置列表
+    height: 地图高度
+    width: 地图宽度
 
 流程：
     - 找出所有等待中的任务（到达且未被服务且未分配）。
     - 找出所有处于空闲或返回空闲状态且电量充足的机器人。
-    - 构建机器人与任务之间的代价矩阵（路径成本 + 能量成本）。
+    - 构建机器人与任务之间的代价矩阵（路径成本 + 能量成本 + 等待时间惩罚）。
     - 使用线性求解器（匈牙利算法）最优匹配机器人与任务。
     - 给机器人分配任务并规划前往路径。
 '''
@@ -36,10 +38,14 @@ def assign_tasks_hungarian(robots, tasks, time, grid, chargers, height, width):
             if is_feasible(robot, task, grid, chargers, height, width):
                 to_task = path_cost(grid, robot.pos, task['location'], height, width)
                 energy_cost = (task['required_energy'] - task['initial_energy']) / CHARGE_TRANSFER
-                total_cost = to_task + energy_cost
+                # energy_cost = (task['required_energy'] - task['initial_energy']) / CHARGE_TRANSFER + \
+                              # path_cost(grid, robot.pos, task['location'], height, width) * MOVE_COST
+                wait_time = max(0, time - task['arrival_time'])
+                lam = 10  # 可调参数，控制等待权重,单调递增，但上限为 -λ,调度系统“逐步”提升等待任务的优先级，但不希望它压制所有其他新任务。
+                wait_penalty = -lam * (wait_time / (1 + wait_time))
+                total_cost = to_task + energy_cost + wait_penalty
                 cost_matrix[i][j] = total_cost
 
-    # 修复点：排除无解矩阵
     if not np.isfinite(cost_matrix).any():
         return
 

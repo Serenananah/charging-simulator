@@ -1,36 +1,35 @@
-# environment.py （支持规模动态切换）
+# environment.py （支持规模动态切换 + 三阶段充电）
 
 import numpy as np
 import random
 from collections import deque
 import heapq
+from sklearn.datasets import make_blobs
 
 # ================= 参数设置 =================
-# 部分规模切换相关的参数值需在接口文件app.py中作为参数传入，并非在此处作为全局变量
-# WIDTH、HEIGHT、NUM_ROBOTS、TOTAL_TASKS、LAMBDA = TOTAL_TASKS / MAX_TIME在task函数中动态计算
-
-# 地图元素数量设定
-# NUM_PARKING_GROUPS = 5  # 停车位组数
-PARKING_GROUP_SIZE = 6  # 每组停车位大小
-
-# 任务和时间参数
-MAX_TIME = 100  # 总时间步数（泊松到达基准）
-INTERVAL = 500  # 调度间隔步数（备用）
-
-# 机器人参数
+PARKING_GROUP_SIZE = 6
+MAX_TIME = 100
+INTERVAL = 500
 ROBOT_SPEED = 1
 MAX_BATTERY = 100
 MOVE_COST = 1
 CHARGE_RATE = 5
 LOW_BATTERY_THRESHOLD = 15
 CHARGE_TRANSFER = 5
-IDLE_TIMEOUT = 10
+IDLE_TIMEOUT = 3  # 缩短等待触发时间
 
-# 地图元素编码
 EMPTY, OBSTACLE, PARKING_SPOT, CHARGING_STATION = 0, 1, 2, 3
-
-# 4个方向
 DIRECTIONS = [(-1, 0), (1, 0), (0, -1), (0, 1)]
+
+# ========== 锂电池三阶段充电函数 ==========
+def battery_charging_curve(current_percent, max_rate=5.0):
+    if current_percent < 0.8:
+        return max_rate  # 恒流
+    elif current_percent < 0.98:
+        slope = (max_rate - 0.5) / (0.98 - 0.8)
+        return max_rate - slope * (current_percent - 0.8)  # 恒压
+    else:
+        return 0.1  # 滴流
 
 # ================= 地图生成 =================
 def place_building(grid, top_left, size, height, width):
@@ -42,10 +41,9 @@ def place_building(grid, top_left, size, height, width):
         for j in range(top_left[1], min(top_left[1] + w, width)):
             grid[i][j] = OBSTACLE
 
-
-def generate_realistic_obstacles(grid, height, width, max_obstacles=12):
+def generate_realistic_obstacles(grid, height, width, max_obstacles):
     """
-    在地图上随机生成障碍物，最大数量可控
+    在地图上随机生成若干个障碍物，模拟真实建筑物布局
     """
     attempts = 0
     while attempts < max_obstacles:
@@ -55,43 +53,81 @@ def generate_realistic_obstacles(grid, height, width, max_obstacles=12):
             place_building(grid, (i, j), (h, w), height, width)
             attempts += 1
 
-def generate_parking_near_edges_or_buildings(grid, height, width, num_parking_groups=5):
+# 三种分布策略
+def generate_parking_near_edges_or_buildings(grid, height, width, parking_groups, distribution='clustered'):
     """
-    生成停车位，最大组数可控
+    靠近障碍物或边界生成停车位，增加地图复杂性
     """
-    count, placements = 0, 0
-    while placements < num_parking_groups and count < 100:
-        count += 1
-        orientation = random.choice(['horizontal', 'vertical'])
-        length = PARKING_GROUP_SIZE
-        i, j = random.randint(0, height - 1), random.randint(0, width - 1)
-
-        if orientation == 'horizontal':
-            if j + length >= width: continue
-            region = [(i, j + offset) for offset in range(length)]
-        else:
-            if i + length >= height: continue
-            region = [(i + offset, j) for offset in range(length)]
-
-        if all(grid[x][y] == EMPTY for x, y in region):
-            near_building_or_edge = False
-            for x, y in region:
+    candidate_positions = []
+    for i in range(height):
+        for j in range(width):
+            if grid[i][j] == EMPTY:
                 for dx, dy in DIRECTIONS:
-                    nx, ny = x + dx, y + dy
-                    if not (0 <= nx < height and 0 <= ny < width) or grid[nx][ny] == OBSTACLE:
-                        near_building_or_edge = True
-            if near_building_or_edge:
-                for x, y in region:
-                    grid[x][y] = PARKING_SPOT
-                placements += 1
+                    ni, nj = i + dx, j + dy
+                    if not (0 <= ni < height and 0 <= nj < width) or grid[ni][nj] == OBSTACLE:
+                        candidate_positions.append((i, j))
+                        break
 
-def generate_map(width, height, num_chargers, num_parking_groups=5, max_obstacles=12):
+    selected = []
+
+    if distribution == 'uniform':
+        attempts = 0
+        while len(selected) < parking_groups * PARKING_GROUP_SIZE and attempts < 1000:
+            base = random.choice(candidate_positions)
+            region = set()
+            queue = [base]
+            while queue and len(region) < PARKING_GROUP_SIZE:
+                curr = queue.pop()
+                if curr in region or curr not in candidate_positions:
+                    continue
+                region.add(curr)
+                for dx, dy in DIRECTIONS:
+                    ni, nj = curr[0] + dx, curr[1] + dy
+                    if 0 <= ni < height and 0 <= nj < width and (ni, nj) in candidate_positions:
+                        queue.append((ni, nj))
+            if len(region) == PARKING_GROUP_SIZE:
+                selected.extend(region)
+                for pt in region:
+                    candidate_positions.remove(pt)
+            attempts += 1
+
+    elif distribution == 'clustered':
+        points, _ = make_blobs(n_samples=parking_groups, centers=random.randint(2, 4), cluster_std=1.5,
+                               center_box=(0, width))
+        points = [(int(y), int(x)) for x, y in points]
+        for cx, cy in points:
+            region = []
+            attempts = 0
+            while len(region) < PARKING_GROUP_SIZE and attempts < 100:
+                dx, dy = random.choice([(0, 0), (1, 0), (0, 1), (-1, 0), (0, -1)])
+                px, py = min(max(cx + dx, 0), height - 1), min(max(cy + dy, 0), width - 1)
+                if grid[px][py] == EMPTY and (px, py) not in region:
+                    region.append((px, py))
+                attempts += 1
+            if len(region) == PARKING_GROUP_SIZE:
+                selected.extend(region)
+
+    elif distribution == 'mixed':
+        half = parking_groups // 2
+        # uniform half
+        generate_parking_near_edges_or_buildings(grid, half, PARKING_GROUP_SIZE, distribution='uniform')
+        # clustered half
+        generate_parking_near_edges_or_buildings(grid, parking_groups - half, PARKING_GROUP_SIZE, distribution='clustered')
+        return  # 直接递归添加，已在 grid 上完成
+
+    else:
+        raise ValueError("Invalid parking distribution")
+
+    for x, y in selected:
+        grid[x][y] = PARKING_SPOT
+
+def generate_map(width, height, num_chargers, parking_groups, max_obstacles, parking_distribution='uniform'):
     """
-    动态参数的完整地图生成
+    生成完整地图，包括障碍、停车位、充电桩
     """
     grid = np.zeros((height, width), dtype=int)
     generate_realistic_obstacles(grid, height, width, max_obstacles)
-    generate_parking_near_edges_or_buildings(grid, height, width, num_parking_groups)
+    generate_parking_near_edges_or_buildings(grid, height, width, parking_groups, distribution=parking_distribution)
 
     edge_candidates = set()
     for i in range(height):
@@ -104,27 +140,40 @@ def generate_map(width, height, num_chargers, num_parking_groups=5, max_obstacle
     edge_candidates = list(edge_candidates)
 
     if len(edge_candidates) >= num_chargers:
-        selected_positions = random.sample(edge_candidates, num_chargers)
+        source = edge_candidates
     else:
-        all_empty = [(i, j) for i in range(height) for j in range(width) if grid[i][j] == EMPTY]
-        if len(all_empty) < num_chargers:
-            raise ValueError(f"地图空间不足，无法放置{num_chargers}个充电桩。")
-        selected_positions = random.sample(all_empty, num_chargers)
+        source = [(i, j) for i in range(height) for j in range(width) if grid[i][j] == EMPTY]
+    step = max(1, len(source) // num_chargers)
+    selected = [source[i] for i in range(0, len(source), step)][:num_chargers]
 
-    for i, j in selected_positions:
+    for i, j in selected:
         grid[i][j] = CHARGING_STATION
 
     return grid
 
+# ========== 任务到达时间生成函数 ==========
+def generate_disclosure_times(num_tasks, planning_horizon, mode='poisson'):
+    if mode == 'poisson':
+        LAMBDA = num_tasks / planning_horizon
+        t, times = 0, []
+        while len(times) < num_tasks:
+            t += np.random.exponential(1 / LAMBDA)
+            times.append(round(t, 2))
+        return times[:num_tasks]
+    elif mode == 'uniform':
+        return list(np.round(np.random.uniform(0, planning_horizon, size=num_tasks), 2))
+    elif mode == 'normal':
+        times = np.random.normal(loc=planning_horizon / 2, scale=planning_horizon / 4, size=num_tasks)
+        return list(np.round(np.clip(times, 0, planning_horizon), 2))
+    else:
+        raise ValueError("Invalid disclosure distribution mode")
 
 # ================= 路径与任务生成 =================
 def a_star(grid, start, goal, height, width):
     """
     使用A*搜索算法，寻找从start到goal的最短路径（曼哈顿距离启发）
     """
-    def h(a, b):
-        return abs(a[0] - b[0]) + abs(a[1] - b[1])
-
+    def h(a, b): return abs(a[0] - b[0]) + abs(a[1] - b[1])
     open = [(h(start, goal), 0, start)]
     came, g = {}, {start: 0}
 
@@ -145,9 +194,7 @@ def a_star(grid, start, goal, height, width):
                     came[nxt] = curr
                     g[nxt] = tg
                     heapq.heappush(open, (tg + h(nxt, goal), tg, nxt))
-
     return []
-
 
 def path_cost(grid, start, goal, height, width):
     """
@@ -155,7 +202,6 @@ def path_cost(grid, start, goal, height, width):
     """
     path = a_star(grid, start, goal, height, width)
     return len(path) if path else float('inf')
-
 
 def is_feasible(robot, task, grid, chargers, height, width):
     """
@@ -166,48 +212,66 @@ def is_feasible(robot, task, grid, chargers, height, width):
     total_cost = (to_task + to_charger) * MOVE_COST + (task['required_energy'] - task['initial_energy'])
     return total_cost <= robot.battery
 
-
-def generate_tasks(grid, chargers, width, height, total_tasks, max_time):
+def generate_tasks(grid, chargers, width, height, total_tasks, max_time, mode='poisson'):
     """
     生成随机到达的任务，确保每个任务可达且机器人可以完成
     """
-    LAMBDA = total_tasks / max_time  # 动态计算泊松到达率
     spots = [(i, j) for i in range(height) for j in range(width) if grid[i][j] == PARKING_SPOT]
+    tasks = []
+    arrival_times = generate_disclosure_times(total_tasks, max_time, mode=mode)
 
-    # 动态调整最大任务量
-    total_tasks = min(total_tasks, len(spots))
+    task_id = 0
+    for t in arrival_times:
+        attempts, success = 0, False
+        while not success and attempts < 50:
+            attempts += 1
 
-    used, tasks, t = set(), [], 0
+            # 1. 当前时刻，哪些车位已被任务占用？
+            occupied = {task['location'] for task in tasks if not task['served']}
 
-    while len(tasks) < total_tasks:
-        t += np.random.exponential(1 / LAMBDA)
-        avail = list(set(spots) - used)
-        if not avail:
-            break
-        loc = random.choice(avail)
-        used.add(loc)
+            # 2. 从空闲停车位中挑选位置
+            available_spots = [s for s in spots if s not in occupied]
+            if not available_spots:
+                break  # 没有位置了
 
-        ini, req = random.uniform(10, 50), random.uniform(80, 100)
+            loc = random.choice(available_spots)
 
-        if all(path_cost(grid, ch, loc, height, width) + path_cost(grid, loc, min(chargers, key=lambda c: path_cost(grid, loc, c, height, width)), height, width) + (req - ini) // MOVE_COST <= MAX_BATTERY for ch in chargers):
-            tasks.append({
-                'task_id': len(tasks),
-                'arrival_time': round(t, 2),
-                'location': loc,
-                'initial_energy': ini,
-                'required_energy': req,
-                'received_energy': 0,
-                'served': False,
-                'assigned_to': None,
-                'start_time': None
-            })
+            # 3. 生成任务电量
+            ini, req = random.uniform(10, 50), random.uniform(80, 100)
+
+            # 4. 判断这个任务是否是可行的（从任何一个充电桩出发都能完成后回桩）
+            feasible = False
+            for ch in chargers:
+                to_task = path_cost(grid, ch, loc)
+                to_charger = min(path_cost(grid, loc, c) for c in chargers)
+                energy_needed = (to_task + to_charger) * MOVE_COST + (req - ini)
+                if energy_needed <= MAX_BATTERY:
+                    feasible = True
+                    break
+
+            # 5. 如果可行就添加任务
+            if feasible:
+                tasks.append({
+                    'task_id': task_id,
+                    'arrival_time': round(t, 2),
+                    'location': loc,
+                    'initial_energy': ini,
+                    'required_energy': req,
+                    'received_energy': 0,
+                    'served': False,
+                    'assigned_to': None,
+                    'start_time': None
+                })
+                task_id += 1
+                success = True
+
+        if not success:
+            break  # 当前时刻没法安排任务，放弃这个任务
+
     return tasks
 
 # ================= 机器人类 =================
 class Robot:
-    """
-    机器人对象，管理位置、任务、电量、状态机
-    """
     def __init__(self, i, pos, chargers):
         self.id = i
         self.pos = pos
@@ -219,9 +283,6 @@ class Robot:
         self.chargers = chargers
 
     def assign(self, task, path):
-        """
-        分配任务并设定行进路径
-        """
         self.task = task
         self.path = deque(path)
         self.state = 'to_task'
@@ -229,9 +290,6 @@ class Robot:
         self.idle_counter = 0
 
     def return_to_charge(self, grid, height, width):
-        """
-        返回最近充电桩充电
-        """
         charger = min(self.chargers, key=lambda c: path_cost(grid, self.pos, c, height, width))
         self.path = deque(a_star(grid, self.pos, charger, height, width))
         self.task = None
@@ -239,9 +297,6 @@ class Robot:
         self.idle_counter = 0
 
     def step(self, grid, t, height, width):
-        """
-        每个时间步执行动作（移动、充电、服务任务等）
-        """
         if self.battery <= 0:
             self.state = 'dead'
             return
@@ -269,7 +324,9 @@ class Robot:
             return
 
         if self.state == 'charging':
-            self.battery = min(MAX_BATTERY, self.battery + CHARGE_RATE)
+            charge_percent = self.battery / MAX_BATTERY
+            charge_rate = battery_charging_curve(charge_percent, max_rate=CHARGE_RATE)
+            self.battery = min(MAX_BATTERY, self.battery + charge_rate)
             if self.battery >= MAX_BATTERY:
                 self.state = 'idle'
             return
@@ -277,11 +334,16 @@ class Robot:
         if self.path:
             self.pos = self.path.popleft()
             self.battery -= MOVE_COST
+
         elif self.task and not self.task['served']:
             if self.task['start_time'] is None:
                 self.task['start_time'] = t
-            need = self.task['required_energy'] - self.task['initial_energy'] - self.task['received_energy']
-            give = min(CHARGE_TRANSFER, need, self.battery)
+            current_energy = self.task['initial_energy'] + self.task['received_energy']
+            target = self.task['required_energy']
+            task_percent = current_energy / target
+            task_charge_rate = battery_charging_curve(task_percent, max_rate=CHARGE_TRANSFER)
+            need = target - current_energy
+            give = min(task_charge_rate, need, self.battery)
             self.task['received_energy'] += give
             self.battery -= give
             if self.task['initial_energy'] + self.task['received_energy'] >= self.task['required_energy']:
