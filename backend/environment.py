@@ -92,6 +92,33 @@ def generate_parking_near_edges_or_buildings(grid, height, width, parking_groups
             attempts += 1
 
     elif distribution == 'clustered':
+        # 模拟性没有原来强但更加稳健，每组在局部半径范围内尝试扩展；
+        attempts_global = 0
+        total_selected = 0
+
+        while total_selected < parking_groups * PARKING_GROUP_SIZE and attempts_global < 1000:
+            cx, cy = random.randint(0, height - 1), random.randint(0, width - 1)
+            region = set()
+            region.add((cx, cy))
+            local_attempts = 0
+
+            while len(region) < PARKING_GROUP_SIZE and local_attempts < 100:
+                base = random.choice(list(region))
+                dx, dy = random.choice(DIRECTIONS)
+                nx, ny = base[0] + dx, base[1] + dy
+                if 0 <= nx < height and 0 <= ny < width and grid[nx][ny] == EMPTY and (nx, ny) not in region:
+                    region.add((nx, ny))
+                local_attempts += 1
+
+            if len(region) == PARKING_GROUP_SIZE:
+                for x, y in region:
+                    grid[x][y] = PARKING_SPOT
+                total_selected += PARKING_GROUP_SIZE
+
+            attempts_global += 1
+
+        ''' 原clustered
+        elif distribution == 'clustered':
         points, _ = make_blobs(n_samples=parking_groups, centers=random.randint(2, 4), cluster_std=1.5,
                                center_box=(0, width))
         points = [(int(y), int(x)) for x, y in points]
@@ -106,13 +133,18 @@ def generate_parking_near_edges_or_buildings(grid, height, width, parking_groups
                 attempts += 1
             if len(region) == PARKING_GROUP_SIZE:
                 selected.extend(region)
+        selected = []
+        required_total = parking_groups * PARKING_GROUP_SIZE
+        '''
+
+        return
 
     elif distribution == 'mixed':
         half = parking_groups // 2
         # uniform half
-        generate_parking_near_edges_or_buildings(grid, half, PARKING_GROUP_SIZE, distribution='uniform')
+        generate_parking_near_edges_or_buildings(grid, height, width, half, distribution='uniform')
         # clustered half
-        generate_parking_near_edges_or_buildings(grid, parking_groups - half, PARKING_GROUP_SIZE, distribution='clustered')
+        generate_parking_near_edges_or_buildings(grid, height, width, parking_groups - half, distribution='clustered')
         return  # 直接递归添加，已在 grid 上完成
 
     else:
@@ -217,6 +249,8 @@ def generate_tasks(grid, chargers, width, height, total_tasks, max_time, mode='p
     生成随机到达的任务，确保每个任务可达且机器人可以完成
     """
     spots = [(i, j) for i in range(height) for j in range(width) if grid[i][j] == PARKING_SPOT]
+    if not spots:
+        print("[Debug] ⚠️ 当前地图上未成功生成任何车位")
     tasks = []
     arrival_times = generate_disclosure_times(total_tasks, max_time, mode=mode)
 
@@ -242,8 +276,8 @@ def generate_tasks(grid, chargers, width, height, total_tasks, max_time, mode='p
             # 4. 判断这个任务是否是可行的（从任何一个充电桩出发都能完成后回桩）
             feasible = False
             for ch in chargers:
-                to_task = path_cost(grid, ch, loc)
-                to_charger = min(path_cost(grid, loc, c) for c in chargers)
+                to_task = path_cost(grid, ch, loc, height, width)
+                to_charger = min(path_cost(grid, loc, c, height, width) for c in chargers)
                 energy_needed = (to_task + to_charger) * MOVE_COST + (req - ini)
                 if energy_needed <= MAX_BATTERY:
                     feasible = True
@@ -281,6 +315,7 @@ class Robot:
         self.state = 'idle'
         self.idle_counter = 0
         self.chargers = chargers
+        self.energy_used = 0  # 机器人累计消耗能量
 
     def assign(self, task, path):
         self.task = task
@@ -312,6 +347,7 @@ class Robot:
             if self.path:
                 self.pos = self.path.popleft()
                 self.battery -= MOVE_COST
+                self.energy_used += MOVE_COST
             else:
                 self.state = 'charging'
             return
@@ -334,6 +370,7 @@ class Robot:
         if self.path:
             self.pos = self.path.popleft()
             self.battery -= MOVE_COST
+            self.energy_used += MOVE_COST
 
         elif self.task and not self.task['served']:
             if self.task['start_time'] is None:
@@ -346,6 +383,7 @@ class Robot:
             give = min(task_charge_rate, need, self.battery)
             self.task['received_energy'] += give
             self.battery -= give
+            self.energy_used += give
             if self.task['initial_energy'] + self.task['received_energy'] >= self.task['required_energy']:
                 self.task['served'] = True
                 self.task = None

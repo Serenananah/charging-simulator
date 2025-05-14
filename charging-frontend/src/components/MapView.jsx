@@ -25,6 +25,7 @@ function MapView({ state }) {
   const grid = state.grid || [];
   const robots = state.robots || [];
   const tasks = state.tasks || [];
+  const tick = state.tick || 0; // ✅ 当前时间步
 
   const GRID_SIZE = grid.length;  // ✅ 动态格子数量
   const TOTAL_SIZE = 625;          // ✅ 固定总尺寸，比如625px
@@ -92,17 +93,24 @@ function MapView({ state }) {
         )}
 
         {/* 绘制任务（未完成任务：#0984e3蓝色五角星/#f5b971黄色五角星/#f5a623鲜亮橙黄，完成任务：灰色半透明五角星） */}
-        {tasks.map((task) => (
-            <polygon
-                key={`task-${task.task_id}`}
-                points={generateStarPoints(task.location[1] * CELL_SIZE + CELL_SIZE / 2, task.location[0] * CELL_SIZE + CELL_SIZE / 2, 6, 12, 5)}
-                fill={task.served ? "#bdc3c7" : "#f5a623"}
-                // ✅ 完成任务半透明
-                opacity={task.served ? 0.6 : 1}
-                stroke={task.served ? "#95a5a6" : "#d35400"} // ✅ 未完成任务橙色描边，完成任务灰描边
-                strokeWidth="1" // ✅ 细轮廓，提升清晰度
-            />
-        ))}
+        {tasks.map((task) => {
+            if (task.arrival_time > tick) return null; // ✅ 不显示未来任务（对齐后端动画）
+            return (
+              <polygon
+                  key={`task-${task.task_id}`}
+                  points={generateStarPoints(
+                      task.location[1] * CELL_SIZE + CELL_SIZE / 2,
+                      task.location[0] * CELL_SIZE + CELL_SIZE / 2,
+                      6, 12, 5
+                  )}
+                  fill={task.served ? "#bdc3c7" : "#f5a623"}
+                  // ✅ 完成任务半透明
+                  opacity={task.served ? 0.6 : 1}
+                  stroke={task.served ? "#95a5a6" : "#d35400"} // ✅ 未完成任务橙色描边，完成任务灰描边
+                  strokeWidth="1" // ✅ 细轮廓，提升清晰度
+              />
+            );
+        })}
 
         {/* 绘制机器人（根据电量动态变色） */}
         {robots.map((r) => (

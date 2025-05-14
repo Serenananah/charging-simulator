@@ -99,7 +99,7 @@ def next_step():
     state["tick"] += 1
 
     if state["strategy"] == "hungarian":
-        # ✅ 严格对齐动画版逻辑：仅在有空闲且电量充足的机器人时触发调度器
+        #  仅在有空闲且电量充足的机器人时触发调度器
         if should_dispatch(state["robots"]):
             assign_tasks_hungarian(
                 state["robots"], state["tasks"], state["tick"],
@@ -164,9 +164,15 @@ def next_step():
 # ========== 获取当前状态快照 ==========
 @app.route("/api/get_state")
 def get_state():
-    energy = sum(MAX_BATTERY - r.battery for r in state["robots"])
+    energy = sum(r.energy_used for r in state["robots"])
     done = [t for t in state["tasks"] if t["served"]]
     delay = sum(t["start_time"] - t["arrival_time"] for t in done if t["start_time"] is not None) / len(done) if done else 0
+    # 所有已经出现的任务
+    appeared = [t for t in state["tasks"] if t["arrival_time"] <= state["tick"]]
+    # 当前已出现任务中，成功完成（未过期）的比例
+    completed = [t for t in appeared if t["served"] and not t.get("expired")]
+    # 完成率（去除过期任务）
+    completionRate = 100 * len(completed) / len(appeared) if appeared else 0
 
     return jsonify({
         "tick": state["tick"],
@@ -185,8 +191,9 @@ def get_state():
         "arrival": state["arrival"],
         "metrics": {
             "energy": round(energy, 2),
-            "delay": round(delay, 2),
-            "completed": len(done)
+            "delay": round(delay, 2), # 从任务生成到首次被机器人服务的平均时间
+            "completed": len(done),
+            "completionRate": round(completionRate, 1)
         }
     })
 
