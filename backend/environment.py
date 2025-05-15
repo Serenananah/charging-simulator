@@ -1,5 +1,5 @@
 # environment.py （支持规模动态切换 + 三阶段充电）
-
+import math
 import numpy as np
 import random
 from collections import deque
@@ -92,30 +92,70 @@ def generate_parking_near_edges_or_buildings(grid, height, width, parking_groups
             attempts += 1
 
     elif distribution == 'clustered':
-        # 模拟性没有原来强但更加稳健，每组在局部半径范围内尝试扩展；
-        attempts_global = 0
-        total_selected = 0
+        total_spots = parking_groups * PARKING_GROUP_SIZE
+        # 每簇大致一半左右，±1
+        half = PARKING_GROUP_SIZE // 2
+        low, high = max(1, half - 1), min(PARKING_GROUP_SIZE, half + 1)
 
-        while total_selected < parking_groups * PARKING_GROUP_SIZE and attempts_global < 1000:
-            cx, cy = random.randint(0, height - 1), random.randint(0, width - 1)
-            region = set()
-            region.add((cx, cy))
-            local_attempts = 0
+        # 1. 全图所有空格（不再只限障碍边缘）
+        empties = [(i, j) for i in range(height) for j in range(width) if grid[i][j] == EMPTY]
 
-            while len(region) < PARKING_GROUP_SIZE and local_attempts < 100:
-                base = random.choice(list(region))
+        # 2. Farthest‐point Sampling 挑 seed，使种子彼此最远
+        seeds = [random.choice(empties)]
+        while len(seeds) < parking_groups:
+            # 对每个候选点，算到已有 seeds 的最小距离，取最大的那个
+            next_seed = max(
+                empties,
+                key=lambda p: min((p[0] - s[0]) ** 2 + (p[1] - s[1]) ** 2 for s in seeds)
+            )
+            seeds.append(next_seed)
+
+        selected = set()
+        # 3. 围绕每个 seed 生长一个小团
+        for sx, sy in seeds:
+            if len(selected) >= total_spots:
+                break
+            size = random.randint(low, high)
+            size = min(size, total_spots - len(selected))
+
+            region = {(sx, sy)}
+            attempts = 0
+            while len(region) < size and attempts < 200:
+                bx, by = random.choice(tuple(region))
                 dx, dy = random.choice(DIRECTIONS)
-                nx, ny = base[0] + dx, base[1] + dy
-                if 0 <= nx < height and 0 <= ny < width and grid[nx][ny] == EMPTY and (nx, ny) not in region:
+                nx, ny = bx + dx, by + dy
+                if (0 <= nx < height and 0 <= ny < width
+                        and grid[nx][ny] == EMPTY
+                        and (nx, ny) not in selected
+                        and (nx, ny) not in region):
                     region.add((nx, ny))
-                local_attempts += 1
+                attempts += 1
 
-            if len(region) == PARKING_GROUP_SIZE:
+            # 如果成功成团，就写入
+            if len(region) == size:
                 for x, y in region:
                     grid[x][y] = PARKING_SPOT
-                total_selected += PARKING_GROUP_SIZE
+                    selected.add((x, y))
 
-            attempts_global += 1
+        # 4. 优先在已有簇的邻居里补齐剩余，避免孤点
+        remaining = total_spots - len(selected)
+        free = {p for p in empties if p not in selected}
+        while remaining > 0 and free:
+            # 找所有已占点的空格邻居
+            nbrs = {
+                (x + dx, y + dy)
+                for (x, y) in selected
+                for dx, dy in DIRECTIONS
+                if (x + dx, y + dy) in free
+            }
+            if nbrs:
+                pt = random.choice(list(nbrs))
+            else:
+                pt = random.choice(list(free))
+            grid[pt[0]][pt[1]] = PARKING_SPOT
+            selected.add(pt)
+            free.remove(pt)
+            remaining -= 1
 
         ''' 原clustered
         elif distribution == 'clustered':
@@ -285,6 +325,7 @@ def generate_tasks(grid, chargers, width, height, total_tasks, max_time, mode='p
 
             # 5. 如果可行就添加任务
             if feasible:
+                departure_time = t + 10 + 1.5 * (req - ini)  # 等待时间可调
                 tasks.append({
                     'task_id': task_id,
                     'arrival_time': round(t, 2),
@@ -293,8 +334,10 @@ def generate_tasks(grid, chargers, width, height, total_tasks, max_time, mode='p
                     'required_energy': req,
                     'received_energy': 0,
                     'served': False,
+                    'expired': False,  # ✅ 新增字段，标记是否因超时未被完成
                     'assigned_to': None,
-                    'start_time': None
+                    'start_time': None,
+                    'departure_time': round(departure_time, 2)  # ✅ 新增
                 })
                 task_id += 1
                 success = True

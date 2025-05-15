@@ -37,6 +37,7 @@ function TickPlayer({ tick, onAdvance, finished, progress }) {
     <div
       className="tick-player"
       style={{
+        marginTop: '-0.05rem',             // 整体卡片上移
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',

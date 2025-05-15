@@ -112,7 +112,7 @@ export default function Overview() {
 
         <div style={{flex: 1.2, display: 'flex', flexDirection: 'column', gap: '1rem'}}>
           <motion.div initial={{opacity: 0}} animate={{opacity: 1}} transition={{duration: 0.5}} style={{ background: '#ffffff', borderRadius: '1rem', padding: '1rem', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
-            <TickPlayer onAdvance={advanceStep} tick={currentState?.tick || 0} finished={simulationFinished} progress={currentState?.metrics ? (currentState.metrics.completed / currentState.tasks.length) * 100 : 0} />
+            <TickPlayer onAdvance={advanceStep} tick={currentState?.tick || 0} finished={simulationFinished} progress={currentState?.metrics ? (currentState.counts.completed / currentState.tasks.length) * 100 : 0} />
           </motion.div>
 
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.5, delay: 0.2 }} style={{ background: '#ffffff', borderRadius: '1rem', padding: '1rem', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
