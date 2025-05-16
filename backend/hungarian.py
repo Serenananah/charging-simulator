@@ -36,14 +36,12 @@ def assign_tasks_hungarian(robots, tasks, time, grid, chargers, height, width):
     for i, robot in enumerate(idle_robots):
         for j, task in enumerate(waiting_tasks):
             if is_feasible(robot, task, grid, chargers, height, width):
-                to_task = path_cost(grid, robot.pos, task['location'], height, width)
-                energy_cost = (task['required_energy'] - task['initial_energy']) / CHARGE_TRANSFER
-                # energy_cost = (task['required_energy'] - task['initial_energy']) / CHARGE_TRANSFER + \
-                              # path_cost(grid, robot.pos, task['location'], height, width) * MOVE_COST
                 wait_time = max(0, time - task['arrival_time'])
                 lam = 10  # 可调参数，控制等待权重,单调递增，但上限为 -λ,调度系统“逐步”提升等待任务的优先级，但不希望它压制所有其他新任务。
                 wait_penalty = -lam * (wait_time / (1 + wait_time))
-                total_cost = to_task + energy_cost + wait_penalty
+                move_cost = path_cost(grid, robot.pos, task['location'], height, width)
+                energy_cost = (task['required_energy'] - task['initial_energy']) / CHARGE_TRANSFER
+                total_cost = move_cost + energy_cost + wait_penalty
                 cost_matrix[i][j] = total_cost
 
     if not np.isfinite(cost_matrix).any():

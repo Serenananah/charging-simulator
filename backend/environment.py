@@ -407,7 +407,7 @@ class Robot:
             charge_rate = battery_charging_curve(charge_percent, max_rate=CHARGE_RATE)
             self.battery = min(MAX_BATTERY, self.battery + charge_rate)
             if self.battery >= MAX_BATTERY:
-                self.state = 'idle'
+                self.state = 'idle'  # ✅ 充满电后切换为可调度状态
             return
 
         if self.path:

@@ -103,14 +103,50 @@ def init_map():
 
 # 判断是否有空闲机器人且电量足够
 def should_dispatch(robots):
-    return any(r.state in ('idle', 'returning_idle') and r.battery >= LOW_BATTERY_THRESHOLD for r in robots)
+    return any(
+        (r.state in ('idle', 'returning_idle') or
+         (r.state == 'charging' and r.battery >= 0.80 * MAX_BATTERY))
+        and r.battery >= LOW_BATTERY_THRESHOLD
+        for r in robots
+    )
 
 @app.route("/api/next_step")
 def next_step():
     total_tasks = len(state["tasks"])
     completed_tasks = sum(1 for t in state["tasks"] if t["served"])
 
+    # ====== 过期机器人 ======
+    for t in state["tasks"]:
+        if (not t["served"]
+                and t.get("assigned_to") is None
+                and state["tick"] > t.get("departure_time", MAX_TIME)
+                and not t.get("expired", False)):
+            t["expired"] = True
+            t["served"] = True  # ✅ 表示生命周期终止
+
+    # ====== 模拟终止条件：所有任务完成 ======
     if completed_tasks == total_tasks and total_tasks > 0:
+        # === 输出最终统计指标（以控制台方式展示） ===
+        energy = sum(r.energy_used for r in state["robots"])
+        appeared = [t for t in state["tasks"] if t["arrival_time"] <= state["tick"]]
+        served = [t for t in appeared if t["served"] and not t.get("expired")]
+        timeout = [t for t in appeared if t.get("expired")]
+        wait_times = [t["start_time"] - t["arrival_time"] for t in served if t["start_time"] is not None]
+
+        avg_wait = sum(wait_times) / len(wait_times) if wait_times else 0
+        wait_std = math.sqrt(variance(wait_times)) if len(wait_times) > 1 else 0
+        completion_rate = 100 * len(served) / len(appeared) if appeared else 0
+        timeout_ratio = 100 * len(timeout) / len(appeared) if appeared else 0
+
+        print("=" * 50)
+        print(f"[Tick {state['tick']}] 仿真已完成，最终统计指标如下：")
+        print(f"总能耗 Energy Used: {energy:.2f} 单位")
+        print(f"平均等待时间 Avg Wait: {avg_wait:.2f} tick")
+        print(f"等待时间标准差 Std Dev: {wait_std:.2f} tick")
+        print(f"完成率 Completion Rate: {completion_rate:.1f}%")
+        print(f"超时率 Timeout Ratio: {timeout_ratio:.1f}%")
+        print("=" * 50)
+
         return jsonify({
             "message": "全部任务已完成",
             "tick": state["tick"],
@@ -179,26 +215,30 @@ def next_step():
 # ========== 获取当前状态快照 ==========
 @app.route("/api/get_state")
 def get_state():
-    # 地图面积
-    area = state["WIDTH"] * state["HEIGHT"]
+    # 地图面积 area = state["WIDTH"] * state["HEIGHT"]
     energy = sum(r.energy_used for r in state["robots"])
-    # 已出现任务（可被分配的）
+    # 已出现任务（可被分配的+包括过期的）
     appeared = [t for t in state["tasks"] if t["arrival_time"] <= state["tick"]]
 
-    # 成功完成任务
-    completed = [t for t in appeared if t["served"] and not t.get("expired")]
+    # 已服务的未过期的任务
+    served = [t for t in appeared if t["served"] and not t.get("expired")]
 
-    # 超时任务（未完成 + 当前tick已超过要求离开时间）
-    timeout = [t for t in appeared if not t["served"] and state["tick"] >= t.get("departure_time", MAX_TIME)]
+    # 已完成任务（包括过期和未过期的）
+    completed = [t for t in state["tasks"] if t["served"]]
 
-    # 等待时间列表（只取已成功完成任务）
-    wait_times = [t["start_time"] - t["arrival_time"] for t in completed if t["start_time"] is not None]
+    # 超时任务（expired）
+    timeout = [t for t in appeared if t.get("expired")]
+
+    # 等待时间列表（只取已成功被服务的任务）
+    wait_times = [t["start_time"] - t["arrival_time"] for t in served if t["start_time"] is not None]
 
     # 计算指标
-    #成功完成任务的从任务生成到首次被机器人服务的平均时间
+    # 成功被服务任务的从任务生成到首次被机器人服务的平均时间
     avg_wait = sum(wait_times) / len(wait_times) if wait_times else 0
     wait_std = math.sqrt(variance(wait_times)) if len(wait_times) > 1 else 0
-    completion_rate = 100 * len(completed) / len(appeared) if appeared else 0
+    # 在已出现的任务中成功服务且未过期的
+    # 与progress进度条辨析：progress是仿真“整体进程”，即所有任务中完成了多少（包括过期的）
+    completion_rate = 100 * len(served) / len(appeared) if appeared else 0
     timeout_ratio = 100 * len(timeout) / len(appeared) if appeared else 0
 
     return jsonify({
@@ -231,6 +271,7 @@ def get_state():
         # 其他可能会用到的数据指标
         "counts": {
             "appeared": len(appeared),
+            "served": len(served),
             "completed": len(completed),
             "timeout": len(timeout)
         }
