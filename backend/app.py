@@ -165,52 +165,108 @@ def next_step():
             )
             print(f"[Tick {state['tick']}] 调用匈牙利调度器 ")
 
-    elif state["strategy"] == "ppo":             # <-- 新增：PPO 分支
-        # 1. 首次创建自定义 PPOAgent
-        if "ppo_agent" not in state:
-            obs_dim    = state["NUM_ROBOTS"] * 3
-            action_dim = len(state["tasks"])
-            state["ppo_agent"] = PPOAgent(
-                obs_dim=obs_dim,
-                action_dim=action_dim,
-                policy_path="policy.pth",   # 确保 path 对应你的 policy.pth 文件
-                device="cpu"
-            )
+        elif state["strategy"] == "ppo":  # <-- 新增：PPO 分支
+            # 1. 首次创建自定义 PPOAgent
+            if "ppo_agent" not in state:
+                obs_dim = state["NUM_ROBOTS"] * 3
+                action_dim = len(state["tasks"]) + 1  # 记得加上“返桩”动作
 
-        # 2. 整理所有未完成的任务（不再考虑 arrival_time）
-        active_tasks = [t for t in state["tasks"] if not t["served"]]
-
-        # 3. 构造 obs，并 flatten
-        obs = np.array([
-            [
-                r.battery / MAX_BATTERY,
-                r.pos[0]   / state["HEIGHT"],
-                r.pos[1]   / state["WIDTH"]
+                # 用当前 scale/distribution/arrival 拼文件名
+                fname = f"policy_{state['scale']}_{state['distribution']}_{state['arrival']}.pth"
+                state["ppo_agent"] = PPOAgent(
+                    obs_dim=obs_dim,
+                    action_dim=action_dim,
+                    policy_path=fname,  # ← 动态加载对应文件
+                    device="cpu"
+                )
+            # 2. 整理所有未完成的任务（不再考虑 arrival_time）
+            active_tasks = [
+                t for t in state["tasks"]
+                if (not t["served"]) and (t.get("assigned_to") is None)
             ]
-            for r in state["robots"]
-        ], dtype=np.float32)      # shape = (NUM_ROBOTS, 3)
-        flat_obs = obs.flatten()  # shape = (NUM_ROBOTS*3,)
 
-        # 4. 用自定义 PPOAgent 预测
-        idx = state["ppo_agent"].choose_action(flat_obs)
+            # 3. 构造 obs，并 flatten
+            obs = np.array([
+                [
+                    r.battery / MAX_BATTERY,
+                    r.pos[0] / state["HEIGHT"],
+                    r.pos[1] / state["WIDTH"]
+                ]
+                for r in state["robots"]
+            ], dtype=np.float32)  # shape = (NUM_ROBOTS, 3)
+            flat_obs = obs.flatten()  # shape = (NUM_ROBOTS*3,)
 
-        # 5. 分配任务给空闲机器人
-        if 0 <= idx < len(active_tasks):
-            task = active_tasks[idx]
-            for r in state["robots"]:
-                if r.task is None and r.state != "charging":
+            # 4. 用自定义 PPOAgent 预测
+            idx = state["ppo_agent"].choose_action(flat_obs)
+            # 4.1 如果选中了 “返回充电” 动作,让电量最低的去充电
+            if idx == len(active_tasks):
+                # 选一个电量最低的机器人去充电
+                to_charge = min(state["robots"], key=lambda r: r.battery)
+                # 解锁它的任务（如果有的话）
+                if to_charge.task is not None:
+                    to_charge.task["assigned_to"] = None
+                    to_charge.task = None
+                # 立即返最近的充电桩
+                to_charge.return_to_charge(
+                    state["grid"],
+                    state["HEIGHT"],
+                    state["WIDTH"]
+                )
+            # 4.2 如果选中了某个任务
+            # 筛出所有空闲且手头无活的机器人
+            for task in active_tasks:
+                # 筛出所有空闲且手头无活的机器人
+                idle_robots = [
+                    r for r in state["robots"]
+                    if r.state == "idle" and r.task is None
+                ]
+                if not idle_robots:
+                    continue
+                # 按到任务点的路径成本升序排序
+                idle_robots.sort(
+                    key=lambda r: path_cost(
+                        state["grid"],
+                        r.pos,
+                        task["location"],
+                        state["HEIGHT"],
+                        state["WIDTH"]
+                    )
+                )
+                # 依次尝试，找到第一个既可行又有路可走的最近机器人
+                for r in idle_robots:
+                    # 可行性检查
+                    if not is_feasible(
+                            r,
+                            task,
+                            state["grid"],
+                            state["chargers"],
+                            state["HEIGHT"],
+                            state["WIDTH"]
+                    ):
+                        continue
+                    # 计算 A* 路径
                     path = a_star(
-                        state["grid"], r.pos, task["location"],
-                        state["HEIGHT"], state["WIDTH"]
+                        state["grid"],
+                        r.pos,
+                        task["location"],
+                        state["HEIGHT"],
+                        state["WIDTH"]
                     )
                     if path:
                         r.assign(task, path)
-                    break
+                        break
 
-    for robot in state["robots"]:
-        robot.step(state["grid"], state["tick"], state["HEIGHT"], state["WIDTH"])
+        for robot in state["robots"]:
+            robot.step(state["grid"], state["tick"], state["HEIGHT"], state["WIDTH"])
 
-    return jsonify({"message": "调度推进一帧", "tick": state["tick"], "done": False})
+        return jsonify({"message": "调度推进一帧", "tick": state["tick"], "done": False})
+
+    # ====== ❗兜底逻辑（永远返回点东西） ======
+    return jsonify({
+        "message": "未知的调度策略或无操作执行",
+        "tick": state["tick"],
+        "done": False
+    })
 
 # ========== 获取当前状态快照 ==========
 @app.route("/api/get_state")
