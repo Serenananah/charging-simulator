@@ -16,7 +16,8 @@ MOVE_COST = 1
 CHARGE_RATE = 5
 LOW_BATTERY_THRESHOLD = 15
 CHARGE_TRANSFER = 5
-IDLE_TIMEOUT = 3  # 缩短等待触发时间
+IDLE_TIMEOUT = 3  # 等待 3tick 没有任务就去充电，缩短等待触发时间
+# 但鬼打墙，gpt 建议我延长，避免机器人刚 idle 就返航
 
 EMPTY, OBSTACLE, PARKING_SPOT, CHARGING_STATION = 0, 1, 2, 3
 DIRECTIONS = [(-1, 0), (1, 0), (0, -1), (0, 1)]
@@ -367,6 +368,7 @@ class Robot:
         task['assigned_to'] = self.id
         self.idle_counter = 0
 
+
     def return_to_charge(self, grid, height, width):
         charger = min(self.chargers, key=lambda c: path_cost(grid, self.pos, c, height, width))
         self.path = deque(a_star(grid, self.pos, charger, height, width))
@@ -408,6 +410,7 @@ class Robot:
             self.battery = min(MAX_BATTERY, self.battery + charge_rate)
             if self.battery >= MAX_BATTERY:
                 self.state = 'idle'  # ✅ 充满电后切换为可调度状态
+                self.idle_counter = 0   # ✅ 自动尝试返回调度器标记：我充完电了，下一轮调度可以优先考虑我
             return
 
         if self.path:
@@ -416,8 +419,15 @@ class Robot:
             self.energy_used += MOVE_COST
 
         elif self.task and not self.task['served']:
+            # 如果 PPO 策略提前安排机器人提前到达任务点，但任务还没到达
+            # 1.该任务的等待时间不会被计入
+            '''
+            if self.task['start_time'] is None and t >= self.task['arrival_time']: # 检查当前 tick t 是否 ≥ 任务到达时间
+                self.task['start_time'] = t  # 机器人此时已经抵达任务地点并开始充电
+            '''
+            # 2.该任务的等待时间记为0
             if self.task['start_time'] is None:
-                self.task['start_time'] = t
+                self.task['start_time'] = max(t, self.task['arrival_time'])
             current_energy = self.task['initial_energy'] + self.task['received_energy']
             target = self.task['required_energy']
             task_percent = current_energy / target
