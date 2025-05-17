@@ -410,7 +410,6 @@ class Robot:
             self.battery = min(MAX_BATTERY, self.battery + charge_rate)
             if self.battery >= MAX_BATTERY:
                 self.state = 'idle'  # ✅ 充满电后切换为可调度状态
-                self.idle_counter = 0   # ✅ 自动尝试返回调度器标记：我充完电了，下一轮调度可以优先考虑我
             return
 
         if self.path:
