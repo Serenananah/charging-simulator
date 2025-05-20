@@ -1,0 +1,150 @@
+/* SystemMetrics.css */
+.metrics-container {
+  padding: 24px;
+  max-width: 1400px;
+  margin: 0 auto;
+  font-family: 'Inter', sans-serif;
+}
+
+.intro-card {
+  background-color: #f9f9f9;
+  padding: 24px;
+  border-radius: 12px;
+  margin-bottom: 32px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.intro-card h2 {
+  font-size: 20px;
+  margin-bottom: 12px;
+}
+
+.intro-card p {
+  font-size: 14px;
+  line-height: 1.6;
+  color: #555;
+}
+
+.grid-container {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 20px;
+}
+
+.chart-box {
+  background-color: white;
+  border-radius: 12px;
+  padding: 15px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+  height: 360px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+}
+
+.chart-box h3 {
+  font-size: 16px;
+  margin-bottom: 8px;
+  color: #222;
+}
+
+/* 顶部横条布局 */
+.scenario-strip {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+/* ========== Header Scenario Strip ========== */
+.scenario-strip {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+  background: #ffffff;
+  border-radius: 10px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+
+.scenario-tag {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: default;
+  background: #f3f3f3;
+  transition: background 0.2s ease;
+}
+
+.scenario-tag:hover {
+  background: #e6eaff;
+}
+
+.scenario-id {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 8px;
+  background-color: #ccc;
+  color: white;
+}
+
+.scenario-label {
+  color: #222;
+}
+
+/* Nature/Sci style colors (倒数第二排) */
+.color-1 .scenario-id { background-color: rgb(78, 101, 155); }  /* #4E659B */
+.color-2 .scenario-id { background-color: rgb(138, 140, 191); } /* #8A8CBF */
+.color-3 .scenario-id { background-color: rgb(184, 168, 207); } /* #B8A8CF */
+.color-4 .scenario-id { background-color: rgb(231, 188, 198); } /* #E7BCC6 */
+.color-5 .scenario-id { background-color: rgb(253, 207, 158); } /* #FDCF9E */
+.color-6 .scenario-id { background-color: rgb(239, 164, 132); } /* #EFA484 */
+
+/* Tooltip default */
+.tooltip {
+  position: absolute;
+  font-size: 12px;
+  color: white;
+  background: #333;
+  padding: 8px 10px;
+  border-radius: 6px;
+  white-space: pre-wrap;
+  width: 220px;
+  text-align: left;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+  z-index: 10;
+}
+
+.tooltip.bottom {
+  top: 110%;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.tooltip.right {
+  top: 50%;
+  left: 105%;
+  transform: translateY(-50%);
+}
+
+.scenario-tag:hover .tooltip {
+  opacity: 1;
+}
+
+

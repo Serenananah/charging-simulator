@@ -1,7 +1,37 @@
-/**
- *    •	折线图：任务完成数 / 总能耗 / 延迟时间 随时间变化（tick 轴）
- *    •	堆叠面积图：多个机器人能耗趋势
- *    •	雷达图：不同策略的多个指标性能对比
- *    •	玫瑰图：失败任务的分布时间段
- *    •	交互图：Hover 显示该 tick 时具体完成了什么任务
- */
+import React from 'react';
+import Barchart from '../components/Barchart';
+import BarStack from '../components/BarStack';
+import Boxplot from '../components/Boxplot';
+import LineCharts from '../components/LineCharts';
+import ScenarioHeaderStrip from '../components/Scenar.jsx'
+
+import '../styles/metrics.css';
+
+export default function SystemMetrics() {
+  const chartWidth = 500;
+  const chartHeight = 300;
+
+  return (
+    <div className="metrics-container">
+      <ScenarioHeaderStrip />
+      <div className="grid-container">
+        <div className="chart-box">
+          <h3>Total Energy Consumption</h3>
+          <Barchart width={chartWidth} height={chartHeight}/>
+        </div>
+        <div className="chart-box">
+          <h3>Completion & Timeout Rate</h3>
+          <BarStack width={chartWidth} height={chartHeight}/>
+        </div>
+        <div className="chart-box">
+          <h3>Wait Time Variance</h3>
+          <Boxplot width={chartWidth} height={chartHeight}/>
+        </div>
+        <div className="chart-box">
+          <h3>Average Wait Time</h3>
+          <LineCharts width={chartWidth} height={chartHeight}/>
+        </div>
+      </div>
+    </div>
+  );
+}

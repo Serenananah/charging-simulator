@@ -1,14 +1,13 @@
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 from statistics import variance
-import math
-import numpy as np
-import random
 
 # 导入核心模块
 from hungarian import assign_tasks_hungarian
 from environment import *
 from ppo_custom import PPOAgent
+# 导入S-PSO-D调度器
+# from s_pso_d_scheduler import SPSODispatcher
 
 app = Flask(__name__)
 CORS(app)
@@ -25,7 +24,8 @@ state = {
     "WIDTH": 0,              # 地图宽度
     "HEIGHT": 0,             # 地图高度
     "distribution": "uniform", # 停车位分布策略
-    "arrival": "poisson"       # 任务到达策略
+    "arrival": "poisson",       # 任务到达策略
+    "metrics_record": {}
 }
 
 # ========== 初始化地图与系统 ==========
@@ -138,14 +138,18 @@ def next_step():
         completion_rate = 100 * len(served) / len(appeared) if appeared else 0
         timeout_ratio = 100 * len(timeout) / len(appeared) if appeared else 0
 
-        print("=" * 50)
-        print(f"[Tick {state['tick']}] 仿真已完成，最终统计指标如下：")
-        print(f"总能耗 Energy Used: {energy:.2f} 单位")
-        print(f"平均等待时间 Avg Wait: {avg_wait:.2f} tick")
-        print(f"等待时间标准差 Std Dev: {wait_std:.2f} tick")
-        print(f"完成率 Completion Rate: {completion_rate:.1f}%")
-        print(f"超时率 Timeout Ratio: {timeout_ratio:.1f}%")
-        print("=" * 50)
+        key = f"{state['strategy']}_{state['scale']}_{state['distribution']}_{state['arrival']}"
+
+        record = state.setdefault("metrics_record", {}).setdefault(key, {
+            "runs": 0, "energy_used": 0, "avg_wait": 0, "wait_std": 0,
+            "completion_rate": 0, "timeout_ratio": 0
+        })
+        record["runs"] += 1
+        record["energy_used"] += energy
+        record["avg_wait"] += avg_wait
+        record["wait_std"] += wait_std
+        record["completion_rate"] += completion_rate
+        record["timeout_ratio"] += timeout_ratio
 
         return jsonify({
             "message": "全部任务已完成",
@@ -155,6 +159,7 @@ def next_step():
 
     state["tick"] += 1
 
+    # 匈牙利算法
     if state["strategy"] == "hungarian" and any(r.state == "idle" for r in state["robots"]):
         #  仅在有空闲且电量充足的机器人时触发调度器
         if should_dispatch(state["robots"]):
@@ -165,7 +170,8 @@ def next_step():
             )
             print(f"[Tick {state['tick']}] 调用匈牙利调度器 ")
 
-    elif state["strategy"] == "ppo":  # <-- 新增：PPO 分支
+    # PPO算法
+    elif state["strategy"] == "ppo":
         # 1. 首次创建自定义 PPOAgent
         if "ppo_agent" not in state:
             obs_dim = state["NUM_ROBOTS"] * 3
@@ -326,6 +332,26 @@ def get_state():
             "timeout": len(timeout)
         }
     })
+
+# 提供获取平均值的 API
+@app.route("/api/metrics_summary")
+def metrics_summary():
+    results = []
+    for key, record in state.get("metrics_record", {}).items():
+        if record["runs"] == 0:
+            continue
+        results.append({
+            "scenario": key,
+            "runs": record["runs"],
+            "avg_energy": round(record["energy_used"] / record["runs"], 2),
+            "avg_wait": round(record["avg_wait"] / record["runs"], 2),
+            "avg_std": round(record["wait_std"] / record["runs"], 2),
+            "avg_completion": round(record["completion_rate"] / record["runs"], 2),
+            "avg_timeout": round(record["timeout_ratio"] / record["runs"], 2)
+        })
+    return jsonify(results)
+
+
 
 if __name__ == '__main__':
     app.run(debug=True, port=5050)

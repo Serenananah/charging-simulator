@@ -10,7 +10,7 @@ import { AppSidebar } from "./components/AppSidebar"
 import Overview from "./pages/Overview"
 
 // ⚠️ 后续你也会添加新的页面，比如：
-// import Metrics from "./pages/Metrics"
+import Metrics from "./pages/SystemMetrics"
 // import Robots from "./pages/Robots"
 // import Settings from "./pages/Settings"
 
@@ -40,7 +40,7 @@ function App() {
 
             {/* 🚧 示例：你未来可以在这里添加更多页面，比如： */}
             {/* 页面路径 "/metrics" 显示 Metrics 页面 */}
-            {/* <Route path="/metrics" element={<Metrics />} /> */}
+            <Route path="/metrics" element={<Metrics />} />
 
             {/* 页面路径 "/robots" 显示 Robots 页面 */}
             {/* <Route path="/robots" element={<Robots />} /> */}

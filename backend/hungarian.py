@@ -40,7 +40,7 @@ def assign_tasks_hungarian(robots, tasks, time, grid, chargers, height, width):
                 lam = 10  # 可调参数，控制等待权重,单调递增，但上限为 -λ,调度系统“逐步”提升等待任务的优先级，但不希望它压制所有其他新任务。
                 wait_penalty = -lam * (wait_time / (1 + wait_time))
                 move_cost = path_cost(grid, robot.pos, task['location'], height, width)
-                energy_cost = (task['required_energy'] - task['initial_energy']) / CHARGE_TRANSFER
+                energy_cost = (task['required_energy'] - task['initial_energy']) #/ CHARGE_TRANSFER
                 total_cost = move_cost + energy_cost + wait_penalty
                 cost_matrix[i][j] = total_cost
 
