@@ -164,7 +164,7 @@ export default function Barchart({
           }}
         >
           <div><strong>{tooltipData.key}</strong></div>
-          <div>Scenario: {tooltipData.scenario}</div>
+          {/*<div>Scenario: {tooltipData.scenario}</div>*/}
           <div>Value: {tooltipData.value.toFixed(2)}</div>
         </TooltipWithBounds>
       )}
