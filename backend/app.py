@@ -55,18 +55,18 @@ def init_map():
         if scale == "small":
             w, h = 25, 25
             task_density = 0.07  # 44
-            robot_density = 0.020
-            group_density = 0.012
+            robot_density = 0.020 # 13
+            group_density = 0.012 # 8
         elif scale == "medium":
             w, h = 35, 35
             task_density = 0.06  # 74
-            robot_density = 0.017
-            group_density = 0.011
+            robot_density = 0.017 # 21
+            group_density = 0.011 # 13
         elif scale == "large":
             w, h = 40, 40
             task_density = 0.05  # 80
-            robot_density = 0.015
-            group_density = 0.010
+            robot_density = 0.015 # 24
+            group_density = 0.010 # 16
         else:
             raise ValueError("Invalid scale (use 'small', 'medium', 'large')")
 
@@ -120,14 +120,23 @@ def next_step():
     total_tasks = len(state["tasks"])
     completed_tasks = sum(1 for t in state["tasks"] if t["served"])
 
+    MAX_DELAY = 20  # 任务分配后最长等待时间（tick）
     # ====== 过期机器人 ======
     for t in state["tasks"]:
         if (not t["served"]
                 # and t.get("assigned_to") is None
                 and state["tick"] > t.get("departure_time", MAX_TIME)
                 and not t.get("expired", False)):
-            t["expired"] = True
-            t["served"] = True  # ✅ 表示生命周期终止
+            # 如果任务从未分配，或已分配但长时间没人执行也过期
+            assigned = t.get("assigned_to")
+            assigned_robot = next((r for r in state["robots"] if r.id == assigned), None)
+
+            if assigned is None or (
+                    assigned_robot and assigned_robot.task != t
+                    and (state["tick"] - t["arrival_time"] > MAX_DELAY)
+            ):
+                t["expired"] = True
+                t["served"] = True  # ✅ 表示生命周期终止
 
     # ====== 模拟终止条件：所有任务完成 ======
     if completed_tasks == total_tasks and total_tasks > 0:
