@@ -22,6 +22,8 @@ from gym import spaces
 from stable_baselines3 import PPO
 from stable_baselines3.common.vec_env import DummyVecEnv, VecMonitor
 from stable_baselines3.common.callbacks import EvalCallback, StopTrainingOnRewardThreshold
+from collections import deque
+
 
 # 清理日志目录
 LOG_DIR = "ppo_logs"
@@ -141,91 +143,162 @@ class RobotSchedulingEnv(gym.Env):
             [r.battery / MAX_BATTERY, r.pos[0] / self.HEIGHT, r.pos[1] / self.WIDTH]
             for r in self.robots
         ], dtype=np.float32)
+    
+##新加入
+    def _rebalance_robots_by_density(self):
+        # 1. 筛选空闲、能量充足的机器人
+        active_robots = [
+            r for r in self.robots
+            if r.state == 'idle' and r.task is None and r.battery > LOW_BATTERY_THRESHOLD
+        ]
+        if not active_robots:
+            return
+
+        # 2. 统计机器人密度（按网格划分区域）
+        region_size = 5  # 每 5x5 个格子为一个区域，可调
+        region_counts = {}
+
+        for r in self.robots:
+            x, y = r.pos
+            region = (x // region_size, y // region_size)
+            region_counts[region] = region_counts.get(region, 0) + 1
+
+        # 3. 找出密度最高 & 最低区域
+        if not region_counts:
+            return
+
+        max_region = max(region_counts.items(), key=lambda kv: kv[1])[0]
+        min_region = min(region_counts.items(), key=lambda kv: kv[1])[0]
+
+        if max_region == min_region:
+            return  # 没有差异，不做迁移
+
+        # 4. 找出高密度区中的机器人，向低密度区中央前进
+        for r in active_robots:
+            rx, ry = r.pos
+            r_region = (rx // region_size, ry // region_size)
+            if r_region == max_region:
+                # 将机器人移向低密度区中心点
+                target_x = min_region[0] * region_size + region_size // 2
+                target_y = min_region[1] * region_size + region_size // 2
+                path = a_star( self.grid, r.pos, (target_x, target_y),self.HEIGHT, self.WIDTH,)
+                if path:
+                    r.task = None
+                    r.path = deque(path)
+                    r.state = 'to_balance'
+
 
 
     def step(self, action):
+        # 记录上一步完成的任务数、电量和位置，用于奖励计算
         prev_done = sum(t['served'] for t in self.tasks)
         self.prev_batteries = [r.battery for r in self.robots]
         self.prev_positions = [tuple(r.pos) for r in self.robots]
 
-            # —— 任务可行性检查 —— 
-    # 如果机器人当前有任务，但电量不足以完成任务再返桩，就立即中断并返航
+        # —— 任务可行性检查 —— 
         for r in self.robots:
             if r.task is not None:
                 feasible = is_feasible(
-                    r, 
-                    r.task, 
-                    self.grid, 
-                    self.chargers, 
-                    self.HEIGHT, 
-                    self.WIDTH
+                    r, r.task, self.grid, self.chargers,
+                    self.HEIGHT, self.WIDTH
                 )
                 if not feasible:
-                    # 解锁当前任务
                     r.task['assigned_to'] = None
                     r.task = None
-                    # 返最近的充电桩
                     r.return_to_charge(self.grid, self.HEIGHT, self.WIDTH)
 
-        # 低电量机器人先返回充电
+        # —— 低电量空闲机器人主动返航 —— 
         for r in self.robots:
-            if r.battery < LOW_BATTERY_THRESHOLD:
+            if r.state == 'idle' and r.battery < LOW_BATTERY_THRESHOLD:
                 if r.task is not None:
                     r.task['assigned_to'] = None
                     r.task = None
                 r.return_to_charge(self.grid, self.HEIGHT, self.WIDTH)
 
-        # 执行动作
+        # —— 执行动作 —— 
         if action == len(self.tasks):
-            # —— 返航充电：选电量最低的机器人 —— 
+            # 策略1：最低电量机器人返航
             lowest = min(self.robots, key=lambda r: r.battery)
-            # 解锁它当前的任务（如果有的话）
             if lowest.task is not None:
                 lowest.task['assigned_to'] = None
                 lowest.task = None
-            # 让它返回最近的充电桩
             lowest.return_to_charge(self.grid, self.HEIGHT, self.WIDTH)
-        task = self.tasks[action]
-        if (not task['served']
-            and task['assigned_to'] is None
-            and task['arrival_time'] <= self.timestep):
 
-            # 1) 筛出所有空闲机器人
-            idle_robots = [
+        elif action == len(self.tasks) + 1:
+            # 策略2：所有空闲且低电量机器人返航
+            for r in self.robots:
+                if r.state == 'idle' and r.battery < LOW_BATTERY_THRESHOLD:
+                    if r.task is not None:
+                        r.task['assigned_to'] = None
+                        r.task = None
+                    r.return_to_charge(self.grid, self.HEIGHT, self.WIDTH)
+
+        elif action == len(self.tasks) + 2:
+            # 策略3：空闲高密度机器人迁移到低密度区
+            active = [
                 r for r in self.robots
-                if r.state == 'idle' and r.task is None
+                if r.state == 'idle' and r.task is None and r.battery > LOW_BATTERY_THRESHOLD
             ]
-            if not idle_robots:
-                pass
+            region_size = 5
+            counts = {}
+            for r in self.robots:
+                rx, ry = r.pos
+                region = (rx // region_size, ry // region_size)
+                counts[region] = counts.get(region, 0) + 1
+            if counts:
+                max_reg = max(counts, key=counts.get)
+                min_reg = min(counts, key=counts.get)
+                if max_reg != min_reg:
+                    target = (min_reg[0] * region_size + region_size // 2,
+                            min_reg[1] * region_size + region_size // 2)
+                    for r in active:
+                        if (r.pos[0] // region_size, r.pos[1] // region_size) == max_reg:
+                            path = a_star(self.grid, r.pos, target, self.HEIGHT, self.WIDTH)
+                            if path:
+                                r.task = None
+                                r.path = deque(path)
+                                r.state = 'to_balance'
 
-            # 2) 按到任务点的路径成本升序排序
-            sorted_robots = sorted(
-                idle_robots,
-                key=lambda r: path_cost(
-                    self.grid, r.pos, task['location'],
-                    self.HEIGHT, self.WIDTH
-                )
-            )
+        elif action < len(self.tasks):
+            # 策略0：按任务列表顺序依次尝试分配
+            for task in self.tasks:
+                if (not task['served']
+                    and not task['expired']
+                    and task['arrival_time'] <= self.timestep):
 
-            # 3) 依次尝试直到找到可行路径
-            for r in sorted_robots:
-                path = a_star(
-                    self.grid, r.pos, task['location'],
-                    self.HEIGHT, self.WIDTH
-                )
-                if path:
-                    r.assign(task, path)
-                    break
+                    idle = [
+                        r for r in self.robots
+                        if r.state == 'idle' and r.task is None
+                    ]
+                    if not idle:
+                        continue
 
-        # 所有机器人执行一步
+                    idle.sort(
+                        key=lambda r: path_cost(
+                            self.grid, r.pos, task['location'],
+                            self.HEIGHT, self.WIDTH
+                        )
+                    )
+
+                    for r in idle:
+                        path = a_star(
+                            self.grid, r.pos, task['location'],
+                            self.HEIGHT, self.WIDTH
+                        )
+                        if path:
+                            r.assign(task, path)
+                            break
+
+        # —— 所有机器人执行一步 —— 
         for r in self.robots:
             r.step(self.grid, self.timestep, self.HEIGHT, self.WIDTH)
 
         self.timestep += 1
         obs = self._get_obs()
-        reward = self._compute_reward(prev_done, self.prev_batteries,self.prev_positions)
+        reward = self._compute_reward(prev_done, self.prev_batteries, self.prev_positions)
         done = (self.timestep >= MAX_TIME) or (sum(t['served'] for t in self.tasks) == self.TOTAL_TASKS)
         return obs, reward, done, {}
+
 
     def _compute_reward(self, prev_done, prev_bats, prev_pos):
         reward = 0.0

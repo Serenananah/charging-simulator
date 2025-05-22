@@ -20,7 +20,7 @@ const tooltipStyles = {
   color: 'white',
 };
 
-const strategies = ['Hungarian', 'PPO', 'SPSOD'];
+const strategies = ['Hungarian', 'PPO', 'SPSO'];
 const colors = ['#6c5efb', '#c998ff']; // Completion / Timeout
 
 const allData = {
@@ -40,13 +40,13 @@ const allData = {
     { scenario: 'E5', Completion: 98.86, Timeout: 1.14 },
     { scenario: 'E6', Completion: 53.87, Timeout: 46.13 },
   ],
-  SPSOD: [
-    { scenario: 'E1', Completion: 0, Timeout: 0 },
-    { scenario: 'E2', Completion: 0, Timeout: 0 },
-    { scenario: 'E3', Completion: 0, Timeout: 0 },
-    { scenario: 'E4', Completion: 0, Timeout: 0 },
-    { scenario: 'E5', Completion: 0, Timeout: 0 },
-    { scenario: 'E6', Completion: 0, Timeout: 0 },
+  SPSO: [
+    { scenario: 'E1', Completion: 90.149, Timeout: 9.78 },
+    { scenario: 'E2', Completion: 90.39, Timeout: 9.61 },
+    { scenario: 'E3', Completion: 89.39, Timeout: 10.68 },
+    { scenario: 'E4', Completion: 90.65, Timeout: 9.35 },
+    { scenario: 'E5', Completion: 88.22, Timeout: 11.81 },
+    { scenario: 'E6', Completion: 89.13, Timeout: 10.87 },
   ],
 };
 

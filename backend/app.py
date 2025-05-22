@@ -54,17 +54,17 @@ def init_map():
         # 根据规模选择地图和任务参数
         if scale == "small":
             w, h = 25, 25
-            task_density = 0.07
+            task_density = 0.07  # 44
             robot_density = 0.020
             group_density = 0.012
         elif scale == "medium":
             w, h = 35, 35
-            task_density = 0.06
+            task_density = 0.06  # 74
             robot_density = 0.017
             group_density = 0.011
         elif scale == "large":
             w, h = 40, 40
-            task_density = 0.05
+            task_density = 0.05  # 80
             robot_density = 0.015
             group_density = 0.010
         else:
@@ -177,7 +177,8 @@ def next_step():
             action_dim = len(state["tasks"]) + 1  # 记得加上"返桩"动作
 
             # 用当前 scale/distribution/arrival 拼文件名
-            fname = f"policy_{state['scale']}_{state['distribution']}_{state['arrival']}.pth"
+            # fname = f"policy_{state['scale']}_{state['distribution']}_{state['arrival']}.pth"
+            fname = f"ppo_model/{state['scale']}/policy_{state['scale']}_{state['distribution']}_{state['arrival']}.pth"
             state["ppo_agent"] = PPOAgent(
                 obs_dim=obs_dim,
                 action_dim=action_dim,

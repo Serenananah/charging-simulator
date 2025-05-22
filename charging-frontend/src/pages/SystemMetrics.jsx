@@ -2,7 +2,7 @@ import React from 'react';
 import Barchart from '../components/Barchart';
 import BarStack from '../components/BarStack';
 import Boxplot from '../components/Boxplot';
-import LineCharts from '../components/LineCharts';
+import ThresholdChart from '../components/ThresholdChart.js';
 import ScenarioHeaderStrip from '../components/Scenar.jsx'
 
 import '../styles/metrics.css';
@@ -29,7 +29,7 @@ export default function SystemMetrics() {
         </div>
         <div className="chart-box">
           <h3>Average Wait Time</h3>
-          <LineCharts width={chartWidth} height={chartHeight}/>
+          <ThresholdChart width={chartWidth} height={chartHeight}/>
         </div>
       </div>
     </div>

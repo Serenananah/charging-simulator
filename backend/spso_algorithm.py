@@ -2,6 +2,7 @@ import time
 import numpy as np
 import random
 import copy
+import math
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 import threading
@@ -67,8 +68,10 @@ def greedy_assignment(robots, tasks, grid, chargers, height, width, current_time
     """
     assignments = {}
     
-    # 筛选可用机器人和未分配任务
-    available_robots = [r for r in robots if r.state == "idle" and r.battery >= LOW_BATTERY_THRESHOLD]
+    # 筛选可用机器人和未分配任务 - 包括充电中但电量足够的
+    available_robots = [r for r in robots if 
+                    (r.state == "idle" and r.battery >= LOW_BATTERY_THRESHOLD) or
+                    (r.state == "charging" and r.battery >= MAX_BATTERY * 0.8)]
     pending_tasks = [t for t in tasks if not t.get('served', False) and t.get('assigned_to') is None]
     
     # 计算任务紧急度（基于剩余时间）
@@ -277,17 +280,73 @@ class Particle:
             self.pbest_position = copy.deepcopy(self.position)
             self.pbest_fitness = self.current_fitness
     
+    def _energy_efficient_path(self, start_pos, candidates, remaining_battery):
+        """选择能耗效率最高的下一个目标位置
+        
+        Args:
+            start_pos: 起始位置
+            candidates: 候选目标列表[(id, location, energy_required), ...]
+            remaining_battery: 剩余电量
+            
+        Returns:
+            tuple: (best_id, path_cost, energy_required)，如果无可行目标则返回(None, None, None)
+        """
+        best_score = float('-inf')
+        best_id = None
+        best_cost = None
+        best_required = None
+        
+        for cand_id, location, energy_required in candidates:
+            # 计算距离成本
+            dist = self._get_path_cost(start_pos, location)
+            if dist == float('inf'):
+                continue
+                
+            # 计算总能耗
+            total_energy = dist * MOVE_COST + energy_required
+            
+            # 检查是否有足够电量
+            if total_energy + CRITICAL_BATTERY > remaining_battery:
+                continue
+                
+            # 计算能效分数 (任务价值/能量消耗)
+            # 紧急任务给予更高价值
+            task_value = 1.0
+            if cand_id in self.tasks_dict:
+                task = self.tasks_dict[cand_id]
+                if 'latest_departure_time' in task:
+                    time_left = task['latest_departure_time'] - self.current_time
+                    urgency_factor = max(1.0, 5.0 / max(1, time_left))
+                    task_value = urgency_factor
+            
+            # 能效分数
+            energy_efficiency = task_value / total_energy
+            
+            # 如果该选择效率更高，更新最佳选择
+            if energy_efficiency > best_score:
+                best_score = energy_efficiency
+                best_id = cand_id
+                best_cost = dist
+                best_required = energy_required
+        
+        return best_id, best_cost, best_required
+    
     def _adapt_robots(self, robots):
         """将Robot对象转换为标准字典格式"""
         adapted_robots = []
         for r in robots:
             # 对于环境中的Robot对象
             if hasattr(r, 'id') and hasattr(r, 'pos') and hasattr(r, 'battery'):
+                # 如果是充电状态且电量达到一定水平，将其视为空闲状态
+                state = r.state
+                if state == "charging" and r.battery >= MAX_BATTERY * 0.8:
+                    state = "idle"  # 将充电状态但电量足够的机器人视为空闲
+                    
                 robot_dict = {
                     'id': r.id,
                     'position': tuple(r.pos) if isinstance(r.pos, (list, tuple)) else r.pos,
                     'battery': r.battery,
-                    'state': r.state if hasattr(r, 'state') else 'idle'
+                    'state': state
                 }
                 adapted_robots.append(robot_dict)
             # 对于已经是字典格式的
@@ -295,11 +354,14 @@ class Particle:
                 # 确保位置是标准元组格式
                 if 'position' in r:
                     r['position'] = tuple(r['position']) if isinstance(r['position'], (list, tuple)) else r['position']
+                # 同样处理充电状态
+                if r.get('state') == "charging" and r.get('battery', 0) >= MAX_BATTERY * 0.8:
+                    r['state'] = "idle"
                 adapted_robots.append(r)
         return adapted_robots
     
     def _adapt_tasks(self, tasks):
-        """将Task对象转换为标准字典格式"""
+        """将Task对象转换为标准字典格式，并加入等待时间评估"""
         adapted_tasks = []
         for i, t in enumerate(tasks):
             # 处理环境中的任务
@@ -314,6 +376,18 @@ class Particle:
                 if location:
                     location = tuple(location) if isinstance(location, (list, tuple)) else location
                     
+                # 计算任务等待时间
+                wait_time = 0
+                if 'arrival_time' in t:
+                    wait_time = max(0, self.current_time - t['arrival_time'])
+                
+                # 计算任务紧急度
+                urgency = 0.5  # 默认中等紧急度
+                if 'departure_time' in t:
+                    time_left = t['departure_time'] - self.current_time
+                    # 紧急度：时间越短越紧急
+                    urgency = max(0.1, min(0.9, 1.0 - time_left / 100))
+                    
                 task_dict = {
                     'id': task_id,
                     'location': location,
@@ -321,7 +395,9 @@ class Particle:
                     'initial_energy': t.get('initial_energy', 0),
                     'status': 'pending' if not t.get('served', False) and t.get('assigned_to') is None else 'assigned',
                     'latest_departure_time': t.get('departure_time', float('inf')),
-                    'arrival_time': t.get('arrival_time', 0)
+                    'arrival_time': t.get('arrival_time', 0),
+                    'wait_time': wait_time,  # 新增：等待时间
+                    'urgency': urgency       # 新增：紧急度
                 }
                 adapted_tasks.append(task_dict)
         return adapted_tasks
@@ -479,10 +555,19 @@ class Particle:
             efficiency_pref = min(0.8, max(0.1, energy_efficiency / 20.0))
             
             # 计算总偏好 - 紧急度权重更高
+            # 计算任务紧急性加权
+            urgency_weight = 0.5
+            # 如果任务非常紧急，提高权重
+            if 'latest_departure_time' in task:
+                time_left = task['latest_departure_time'] - self.current_time
+                if time_left < URGENT_TASK_THRESHOLD:  # 20时间单位内的任务视为紧急
+                    urgency_weight = 0.7  # 增加紧急任务权重
+                    
+            # 计算总偏好 - 紧急度权重更高
             self.velocity[robot_id]["task_prefs"][task_id] = (
                 0.3 * dist_pref + 
-                0.5 * urgency_pref + 
-                0.2 * efficiency_pref
+                urgency_weight * urgency_pref + 
+                (1.0 - 0.3 - urgency_weight) * efficiency_pref  # 确保权重总和为1
             )
         
         # 计算充电站偏好
@@ -798,22 +883,25 @@ class Particle:
         unassigned_count = len(pending_task_ids - assigned_task_ids)
         
         # 计算权重适应度
-        α1 = 1.0  # 距离权重
-        α2 = 2.0  # 等待时间权重
-        α3 = 2.0  # 平衡性权重
-        α4 = 10.0  # 未分配任务惩罚权重
-        α5 = 15.0  # 截止时间违反惩罚权重
+        α1 = 1.0  # 距离权重 - 降低以更重视任务完成
+        α2 = 3.0  # 等待时间权重 - 增加以减少平均等待时间
+        α3 = 1.5  # 平衡性权重
+        α4 = 15.0  # 未分配任务惩罚权重 - 显著增加未分配任务的惩罚
+        α5 = 20.0  # 截止时间违反惩罚权重 - 增加以减少超时
+        α6 = 3.5  # 等待时间标准差权重 - 增加以平衡任务处理
         
         avg_wait = sum(wait_times) / len(wait_times) if wait_times else 0
-        wait_variance = np.var(wait_times) if len(wait_times) > 1 else 0
+        wait_std = math.sqrt(np.var(wait_times)) if len(wait_times) > 1 else 0
         balance_penalty = np.std(task_counts) if task_counts else 0
         
+        # 引入等待时间标准差作为优化目标
         fitness = (
             α1 * total_distance + 
             α2 * avg_wait + 
             α3 * balance_penalty + 
             α4 * unassigned_count + 
-            α5 * deadline_violations
+            α5 * deadline_violations +
+            α6 * wait_std  # 新增：等待时间标准差
         )
         
         return fitness
@@ -889,8 +977,15 @@ class HybridSPSODispatcher:
         
         # 1. 筛选数据
         # 筛选可分配任务的机器人和低电量机器人
-        assignable_robots = [r for r in self.robots_all if r.state == "idle" and r.battery >= LOW_BATTERY_THRESHOLD]
-        low_battery_robots = [r for r in self.robots_all if r.state == "idle" and r.battery < LOW_BATTERY_THRESHOLD]
+        # 定义一个新的电量阈值，表示充电到这个程度就可以工作
+        SUFFICIENT_BATTERY_LEVEL = MAX_BATTERY * 0.8  # 充到80%就足够了
+
+        # 筛选可分配任务的机器人和低电量机器人
+        assignable_robots = [r for r in self.robots_all if 
+                            (r.state == "idle" and r.battery >= LOW_BATTERY_THRESHOLD) or
+                            (r.state == "charging" and r.battery >= SUFFICIENT_BATTERY_LEVEL)]
+        low_battery_robots = [r for r in self.robots_all if 
+                            r.state == "idle" and r.battery < LOW_BATTERY_THRESHOLD]
         
         # 筛选待处理任务
         pending_tasks = [t for t in self.tasks_all if not t.get('served', False) and t.get('assigned_to') is None]
@@ -1409,7 +1504,9 @@ def assign_tasks_optimized_hybrid_spso(robots, tasks, tick, grid, chargers, heig
         
         for robot_id, assignment in assignments.items():
             robot = next((r for r in robots if r.id == robot_id), None)
-            if not robot or robot.state != "idle":
+            # 允许充电状态且电量足够的机器人也可以被分配任务
+            if not robot or (robot.state != "idle" and 
+                            not (robot.state == "charging" and robot.battery >= MAX_BATTERY * 0.8)):
                 continue
             
             task_sequence = assignment.get("task_sequence", [])

@@ -16,12 +16,12 @@ import {
 export const background = '#f3f3f3';
 
 const data = [
-  { x: 'E1', PPO: 8.01, Hungarian: 25.26 },
-  { x: 'E2', PPO: 20.90, Hungarian: 26.84 },
-  { x: 'E3', PPO: 15.21, Hungarian: 26.81 },
-  { x: 'E4', PPO: 23.48, Hungarian: 26.48 },
-  { x: 'E5', PPO: 12.85, Hungarian: 28.94 },
-  { x: 'E6', PPO: 18.34, Hungarian: 28.68 },
+  { x: 'E1', PPO: 8.01, Hungarian: 25.26, SPSO: 28.026 },
+  { x: 'E2', PPO: 20.90, Hungarian: 26.84, SPSO: 24.769 },
+  { x: 'E3', PPO: 15.21, Hungarian: 26.81, SPSO: 33.259 },
+  { x: 'E4', PPO: 23.48, Hungarian: 26.48, SPSO: 27.853 },
+  { x: 'E5', PPO: 12.85, Hungarian: 28.94, SPSO: 25.976 },
+  { x: 'E6', PPO: 18.34, Hungarian: 28.68, SPSO: 32.862 },
 ];
 
 const xScale = scalePoint({
@@ -72,8 +72,9 @@ export default function ThresholdChart({ width, height, margin = defaultMargin }
           <AxisBottom top={yMax} scale={xScale} />
           <AxisLeft scale={yScale} />
 
+          {/* PPO vs Hungarian (purple) */}
           <Threshold
-            id="wait-time-threshold"
+            id="ppo-threshold"
             data={data}
             x={d => xScale(d.x) ?? 0}
             y0={d => yScale(d.PPO) ?? 0}
@@ -82,9 +83,24 @@ export default function ThresholdChart({ width, height, margin = defaultMargin }
             clipBelowTo={yMax}
             curve={curveBasis}
             belowAreaProps={{ fill: 'violet', fillOpacity: 0.4 }}
-            aboveAreaProps={{ fill: 'green', fillOpacity: 0.4 }}
+            aboveAreaProps={{ fill: 'violet', fillOpacity: 0.2 }}
           />
 
+          {/* SPSO vs Hungarian (green) */}
+          <Threshold
+            id="spso-threshold"
+            data={data}
+            x={d => xScale(d.x) ?? 0}
+            y0={d => yScale(d.SPSO) ?? 0}
+            y1={d => yScale(d.Hungarian) ?? 0}
+            clipAboveTo={0}
+            clipBelowTo={yMax}
+            curve={curveBasis}
+            belowAreaProps={{ fill: 'green', fillOpacity: 0.3 }}
+            aboveAreaProps={{ fill: 'green', fillOpacity: 0.15 }}
+          />
+
+          {/* Hungarian */}
           <LinePath
             data={data}
             curve={curveBasis}
@@ -106,6 +122,7 @@ export default function ThresholdChart({ width, height, margin = defaultMargin }
             onMouseLeave={hideTooltip}
           />
 
+          {/* PPO */}
           <LinePath
             data={data}
             curve={curveBasis}
@@ -128,12 +145,104 @@ export default function ThresholdChart({ width, height, margin = defaultMargin }
             onMouseLeave={hideTooltip}
           />
 
-          {/* 策略名称标签 */}
-          <text x={xScale('E6')! + 5} y={yScale(data[5].Hungarian)} fontSize={14} fontWeight="bold" fill="#1f77b4">
+          {/* SPSO */}
+          <LinePath
+            data={data}
+            curve={curveBasis}
+            x={d => xScale(d.x) ?? 0}
+            y={d => yScale(d.SPSO) ?? 0}
+            stroke="#2ca02c"
+            strokeWidth={2}
+            strokeDasharray="6,2"
+            onMouseMove={(event) => {
+              const { x, y } = event.nativeEvent;
+              const closest = data.find(d => Math.abs(xScale(d.x)! - (x - margin.left)) < 20);
+              if (closest) {
+                showTooltip({
+                  tooltipData: { label: 'SPSO', x: closest.x, y: closest.SPSO },
+                  tooltipLeft: x,
+                  tooltipTop: y,
+                });
+              }
+            }}
+            onMouseLeave={hideTooltip}
+          />
+
+
+          {/* PPO tooltip points */}
+          {data.map((d, i) => (
+            <circle
+              key={`ppo-point-${i}`}
+              cx={xScale(d.x) ?? 0}
+              cy={yScale(d.PPO) ?? 0}
+              r={10}
+              fill="transparent"
+              pointerEvents="all"
+              onMouseMove={(event) => {
+                const { clientX, clientY } = event;
+                showTooltip({
+                  tooltipData: { label: 'PPO', x: d.x, y: d.PPO },
+                  tooltipLeft: clientX,
+                  tooltipTop: clientY,
+                });
+              }}
+              onMouseLeave={hideTooltip}
+            />
+          ))}
+
+          {/*添加透明交互点来触发tooltip相应*/}
+          {/* SPSO tooltip points */}
+          {data.map((d, i) => (
+            <circle
+              key={`spso-point-${i}`}
+              cx={xScale(d.x) ?? 0}
+              cy={yScale(d.SPSO) ?? 0}
+              r={10}
+              fill="transparent"
+              pointerEvents="all"
+              onMouseMove={(event) => {
+                const { clientX, clientY } = event;
+                showTooltip({
+                  tooltipData: { label: 'SPSO', x: d.x, y: d.SPSO },
+                  tooltipLeft: clientX,
+                  tooltipTop: clientY,
+                });
+              }}
+              onMouseLeave={hideTooltip}
+            />
+          ))}
+
+          {/* Hungarian tooltip points */}
+          {data.map((d, i) => (
+            <circle
+              key={`hungarian-point-${i}`}
+              cx={xScale(d.x) ?? 0}
+              cy={yScale(d.Hungarian) ?? 0}
+              r={10}
+              fill="transparent"
+              pointerEvents="all"
+              onMouseMove={(event) => {
+                const { clientX, clientY } = event;
+                showTooltip({
+                  tooltipData: { label: 'Hungarian', x: d.x, y: d.Hungarian },
+                  tooltipLeft: clientX,
+                  tooltipTop: clientY,
+                });
+              }}
+              onMouseLeave={hideTooltip}
+            />
+          ))}
+
+
+          {/* Labels */}
+          <text x={xScale('E6')!} y={yScale(data[5].Hungarian)} fontSize={10} fontWeight="bold" fill="#1f77b4">
             Hungarian
           </text>
-          <text x={xScale('E6')! + 5} y={yScale(data[5].PPO) - 12} fontSize={14} fontWeight="bold" fill="#ff7f0e">
+          <text x={xScale('E6')!} y={yScale(data[5].PPO) - 10} fontSize={10} fontWeight="bold" fill="#ff7f0e">
             PPO
+          </text>
+          <text x={xScale('E6')!} y={yScale(data[5].SPSO) - 10} fontSize={10} fontWeight="bold" fill="#2ca02c">
+            SPSO
           </text>
         </Group>
       </svg>
