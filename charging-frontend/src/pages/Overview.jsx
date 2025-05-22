@@ -88,10 +88,11 @@ export default function Overview() {
 
         <div style={{flex: 3, display: 'flex', flexDirection: 'column', gap: '1rem'}}>
           <div style={{ background: '#ffffff', borderRadius: '0.75rem', padding: '1rem', boxShadow: '0 4px 12px rgba(0,0,0,0.08)', display: 'flex', flexWrap: 'wrap', gap: '1rem' }}>
-            {[{ label: 'Strategy', value: strategy, setter: setStrategy, options: ['hungarian', 'ppo'] },
+            {[{ label: 'Strategy', value: strategy, setter: setStrategy, options: ['hungarian', 'ppo', 'spso'] }, // <--- 在这里添加 's_pso_d'
               { label: 'Scale', value: scale, setter: setScale, options: ['small', 'medium', 'large'] },
               { label: 'Distribution', value: distribution, setter: setDistribution, options: ['uniform', 'clustered', 'mixed'] },
               { label: 'Arrival Mode', value: arrivalMode, setter: setArrivalMode, options: ['poisson', 'uniform', 'normal'] }].map(({label, value, setter, options}) => (
+              // ... rest of the code
               <div key={label} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: '1 1 0', minWidth: '180px' }}>
                 <label style={{ fontWeight: '500', color: '#334155' }}>{label}:</label>
                 <select value={value} onChange={(e) => setter(e.target.value)} style={{ borderRadius: '0.5rem', padding: '0.4rem 0.6rem', flex: 1 }}>

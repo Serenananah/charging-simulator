@@ -1,13 +1,15 @@
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 from statistics import variance
+import math
+import numpy as np
+import random
 
 # 导入核心模块
 from hungarian import assign_tasks_hungarian
 from environment import *
 from ppo_custom import PPOAgent
-# 导入S-PSO-D调度器
-# from s_pso_d_scheduler import SPSODispatcher
+from spso_algorithm import assign_tasks_optimized_hybrid_spso 
 
 app = Flask(__name__)
 CORS(app)
@@ -24,8 +26,7 @@ state = {
     "WIDTH": 0,              # 地图宽度
     "HEIGHT": 0,             # 地图高度
     "distribution": "uniform", # 停车位分布策略
-    "arrival": "poisson",       # 任务到达策略
-    "metrics_record": {}
+    "arrival": "poisson"       # 任务到达策略
 }
 
 # ========== 初始化地图与系统 ==========
@@ -38,6 +39,10 @@ def init_map():
         distribution = request.args.get("distribution", "uniform")
         arrival = request.args.get("arrival_mode", "poisson")
 
+        # 策略名称标准化
+        if strategy in ["s_pso_d", "spso_d", "spso"]:
+            strategy = "spso"  # 统一为 spso
+        
         # 更新状态参数
         state.update({
             "strategy": strategy,
@@ -138,18 +143,14 @@ def next_step():
         completion_rate = 100 * len(served) / len(appeared) if appeared else 0
         timeout_ratio = 100 * len(timeout) / len(appeared) if appeared else 0
 
-        key = f"{state['strategy']}_{state['scale']}_{state['distribution']}_{state['arrival']}"
-
-        record = state.setdefault("metrics_record", {}).setdefault(key, {
-            "runs": 0, "energy_used": 0, "avg_wait": 0, "wait_std": 0,
-            "completion_rate": 0, "timeout_ratio": 0
-        })
-        record["runs"] += 1
-        record["energy_used"] += energy
-        record["avg_wait"] += avg_wait
-        record["wait_std"] += wait_std
-        record["completion_rate"] += completion_rate
-        record["timeout_ratio"] += timeout_ratio
+        print("=" * 50)
+        print(f"[Tick {state['tick']}] 仿真已完成，最终统计指标如下：")
+        print(f"总能耗 Energy Used: {energy:.2f} 单位")
+        print(f"平均等待时间 Avg Wait: {avg_wait:.2f} tick")
+        print(f"等待时间标准差 Std Dev: {wait_std:.2f} tick")
+        print(f"完成率 Completion Rate: {completion_rate:.1f}%")
+        print(f"超时率 Timeout Ratio: {timeout_ratio:.1f}%")
+        print("=" * 50)
 
         return jsonify({
             "message": "全部任务已完成",
@@ -159,8 +160,7 @@ def next_step():
 
     state["tick"] += 1
 
-    # 匈牙利算法
-    if state["strategy"] == "hungarian" and any(r.state == "idle" for r in state["robots"]):
+    if state["strategy"] == "hungarian":
         #  仅在有空闲且电量充足的机器人时触发调度器
         if should_dispatch(state["robots"]):
             assign_tasks_hungarian(
@@ -170,12 +170,11 @@ def next_step():
             )
             print(f"[Tick {state['tick']}] 调用匈牙利调度器 ")
 
-    # PPO算法
-    elif state["strategy"] == "ppo":
+    elif state["strategy"] == "ppo":  # <-- PPO 分支
         # 1. 首次创建自定义 PPOAgent
         if "ppo_agent" not in state:
             obs_dim = state["NUM_ROBOTS"] * 3
-            action_dim = len(state["tasks"]) + 1  # 记得加上“返桩”动作
+            action_dim = len(state["tasks"]) + 1  # 记得加上"返桩"动作
 
             # 用当前 scale/distribution/arrival 拼文件名
             fname = f"policy_{state['scale']}_{state['distribution']}_{state['arrival']}.pth"
@@ -204,7 +203,7 @@ def next_step():
 
         # 4. 用自定义 PPOAgent 预测
         idx = state["ppo_agent"].choose_action(flat_obs)
-        # 4.1 如果选中了 “返回充电” 动作,让电量最低的去充电
+        # 4.1 如果选中了 "返回充电" 动作,让电量最低的去充电
         if idx == len(active_tasks):
             # 选一个电量最低的机器人去充电
             to_charge = min(state["robots"], key=lambda r: r.battery)
@@ -262,11 +261,21 @@ def next_step():
                     r.assign(task, path)
                     break
 
+    elif state["strategy"] == "spso" or state["strategy"] == "s_pso_d":  # <-- SPSO 分支
+        #  仅在有空闲且电量充足的机器人时触发调度器
+        if should_dispatch(state["robots"]):
+            # 使用优化版本的混合SPSO
+            assign_tasks_optimized_hybrid_spso(
+                state["robots"], state["tasks"], state["tick"],
+                state["grid"], state["chargers"],
+                state["HEIGHT"], state["WIDTH"]
+            )
+            print(f"[Tick {state['tick']}] 调用优化混合SPSO调度器")
+
     for robot in state["robots"]:
         robot.step(state["grid"], state["tick"], state["HEIGHT"], state["WIDTH"])
 
     return jsonify({"message": "调度推进一帧", "tick": state["tick"], "done": False})
-
 
 # ========== 获取当前状态快照 ==========
 @app.route("/api/get_state")
@@ -293,7 +302,7 @@ def get_state():
     avg_wait = sum(wait_times) / len(wait_times) if wait_times else 0
     wait_std = math.sqrt(variance(wait_times)) if len(wait_times) > 1 else 0
     # 在已出现的任务中成功服务且未过期的
-    # 与progress进度条辨析：progress是仿真“整体进程”，即所有任务中完成了多少（包括过期的）
+    # 与progress进度条辨析：progress是仿真"整体进程"，即所有任务中完成了多少（包括过期的）
     completion_rate = 100 * len(served) / len(appeared) if appeared else 0
     timeout_ratio = 100 * len(timeout) / len(appeared) if appeared else 0
 
@@ -333,25 +342,20 @@ def get_state():
         }
     })
 
-# 提供获取平均值的 API
-@app.route("/api/metrics_summary")
-def metrics_summary():
-    results = []
-    for key, record in state.get("metrics_record", {}).items():
-        if record["runs"] == 0:
-            continue
-        results.append({
-            "scenario": key,
-            "runs": record["runs"],
-            "avg_energy": round(record["energy_used"] / record["runs"], 2),
-            "avg_wait": round(record["avg_wait"] / record["runs"], 2),
-            "avg_std": round(record["wait_std"] / record["runs"], 2),
-            "avg_completion": round(record["completion_rate"] / record["runs"], 2),
-            "avg_timeout": round(record["timeout_ratio"] / record["runs"], 2)
-        })
-    return jsonify(results)
-
-
+# ========== 设置调度策略 ==========
+@app.route("/api/set_strategy")
+def set_strategy():
+    strategy = request.args.get("strategy", "hungarian")
+    
+    # 策略名称标准化
+    if strategy in ["s_pso_d", "spso_d", "spso"]:
+        strategy = "spso"  # 统一为 spso
+    
+    if strategy in ["hungarian", "ppo", "spso"]:
+        state["strategy"] = strategy
+        return jsonify({"message": f"调度策略已设置为: {strategy}", "success": True})
+    else:
+        return jsonify({"message": f"无效的策略: {strategy}", "success": False})
 
 if __name__ == '__main__':
     app.run(debug=True, port=5050)
