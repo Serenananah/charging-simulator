@@ -123,7 +123,7 @@ def next_step():
     # ====== 过期机器人 ======
     for t in state["tasks"]:
         if (not t["served"]
-                and t.get("assigned_to") is None
+                # and t.get("assigned_to") is None
                 and state["tick"] > t.get("departure_time", MAX_TIME)
                 and not t.get("expired", False)):
             t["expired"] = True
