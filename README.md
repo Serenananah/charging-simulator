@@ -75,7 +75,7 @@ Each experiment is defined by a 4-tuple:
 
 > The simulator combines these to generate scenarios like `ppo_medium_uniform_poisson`.
 
-## 🧪 Run Instructions
+## Run Instructions
 
 ### 1. Start Backend
 
@@ -88,7 +88,7 @@ python app.py
 ### 2. Start Frontend
 
 ```bash
-cd frontend
+cd charging-frontend
 npm install
 npm run dev
 ```
@@ -97,9 +97,9 @@ Then open `http://localhost:5173`.
 
 ## 📷 Preview
 
-![Overview Demo](./assets/overview-demo.png)
-![Metrices Demo](./assets/metrices-demo.png)
-![Sidebar Demo](./assets/sidebar-demo.png)
+![Overview Demo](charging-frontend/assets/overview-demo.png)
+![Metrices Demo](charging-frontend/assets/metrices-demo.png)
+![Sidebar Demo](charging-frontend/assets/sidebar-demo.png)
 
 ## 📄 License
 
