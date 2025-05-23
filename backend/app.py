@@ -9,25 +9,26 @@ import random
 from hungarian import assign_tasks_hungarian
 from environment import *
 from ppo_custom import PPOAgent
-from spso_algorithm import assign_tasks_optimized_hybrid_spso 
+from spso_algorithm import assign_tasks_optimized_hybrid_spso
 
 app = Flask(__name__)
 CORS(app)
 
 # ========== 全局状态管理 ==========
 state = {
-    "tick": 0,               # 当前时间步
-    "grid": None,            # 地图网格矩阵
-    "chargers": [],          # 所有充电桩位置列表
-    "tasks": [],             # 所有任务列表
-    "robots": [],            # 所有机器人对象列表
-    "strategy": "hungarian", # 当前调度策略
-    "scale": "medium",       # 当前地图规模
-    "WIDTH": 0,              # 地图宽度
-    "HEIGHT": 0,             # 地图高度
-    "distribution": "uniform", # 停车位分布策略
-    "arrival": "poisson"       # 任务到达策略
+    "tick": 0,  # 当前时间步
+    "grid": None,  # 地图网格矩阵
+    "chargers": [],  # 所有充电桩位置列表
+    "tasks": [],  # 所有任务列表
+    "robots": [],  # 所有机器人对象列表
+    "strategy": "hungarian",  # 当前调度策略
+    "scale": "medium",  # 当前地图规模
+    "WIDTH": 0,  # 地图宽度
+    "HEIGHT": 0,  # 地图高度
+    "distribution": "uniform",  # 停车位分布策略
+    "arrival": "poisson"  # 任务到达策略
 }
+
 
 # ========== 初始化地图与系统 ==========
 @app.route("/api/init_map")
@@ -42,7 +43,7 @@ def init_map():
         # 策略名称标准化
         if strategy in ["s_pso_d", "spso_d", "spso"]:
             strategy = "spso"  # 统一为 spso
-        
+
         # 更新状态参数
         state.update({
             "strategy": strategy,
@@ -55,18 +56,18 @@ def init_map():
         if scale == "small":
             w, h = 25, 25
             task_density = 0.07  # 44
-            robot_density = 0.020 # 13
-            group_density = 0.012 # 8
+            robot_density = 0.020  # 13
+            group_density = 0.012  # 8
         elif scale == "medium":
             w, h = 35, 35
             task_density = 0.06  # 74
-            robot_density = 0.017 # 21
-            group_density = 0.011 # 13
+            robot_density = 0.017  # 21
+            group_density = 0.011  # 13
         elif scale == "large":
             w, h = 40, 40
             task_density = 0.05  # 80
-            robot_density = 0.015 # 24
-            group_density = 0.010 # 16
+            robot_density = 0.015  # 24
+            group_density = 0.010  # 16
         else:
             raise ValueError("Invalid scale (use 'small', 'medium', 'large')")
 
@@ -106,6 +107,7 @@ def init_map():
         print(f"初始化失败: {e}")
         return jsonify({"error": str(e)}), 500
 
+
 # 判断是否有空闲机器人且电量足够
 def should_dispatch(robots):
     return any(
@@ -114,6 +116,7 @@ def should_dispatch(robots):
         and r.battery >= LOW_BATTERY_THRESHOLD
         for r in robots
     )
+
 
 @app.route("/api/next_step")
 def next_step():
@@ -287,6 +290,7 @@ def next_step():
 
     return jsonify({"message": "调度推进一帧", "tick": state["tick"], "done": False})
 
+
 # ========== 获取当前状态快照 ==========
 @app.route("/api/get_state")
 def get_state():
@@ -352,20 +356,22 @@ def get_state():
         }
     })
 
+
 # ========== 设置调度策略 ==========
 @app.route("/api/set_strategy")
 def set_strategy():
     strategy = request.args.get("strategy", "hungarian")
-    
+
     # 策略名称标准化
     if strategy in ["s_pso_d", "spso_d", "spso"]:
         strategy = "spso"  # 统一为 spso
-    
+
     if strategy in ["hungarian", "ppo", "spso"]:
         state["strategy"] = strategy
         return jsonify({"message": f"调度策略已设置为: {strategy}", "success": True})
     else:
         return jsonify({"message": f"无效的策略: {strategy}", "success": False})
+
 
 if __name__ == '__main__':
     app.run(debug=True, port=5050)
