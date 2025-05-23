@@ -24,12 +24,12 @@ export const background = '#612efb';
 
 // Custom Data for Total Energy Consumption
 const data = [
-  { scenario: 'E1', PPO: 1533.91, Hungarian: 1514.57, SPSO: 2885.163 },
-  { scenario: 'E2', PPO: 2197.55, Hungarian: 1766.89, SPSO: 5670.076 },
-  { scenario: 'E3', PPO: 2099.46, Hungarian: 1812.66, SPSO: 4853.224 },
-  { scenario: 'E4', PPO: 2442.64, Hungarian: 1970.22, SPSO: 4982.555 },
-  { scenario: 'E5', PPO: 3532.06, Hungarian: 3040.18, SPSO: 4937.552 },
-  { scenario: 'E6', PPO: 4180.53, Hungarian: 3359.19, SPSO: 5516.105 }
+  { scenario: 'E1', PPO: 1493.999, Hungarian: 1578.437, SPSO: 2885.163 },
+  { scenario: 'E2', PPO: 2508.525, Hungarian: 2085.380, SPSO: 5670.076 },
+  { scenario: 'E3', PPO: 2366.844, Hungarian: 1967.353, SPSO: 4853.224 },
+  { scenario: 'E4', PPO: 2769.007, Hungarian: 2176.286, SPSO: 4982.555 },
+  { scenario: 'E5', PPO: 3481.242, Hungarian: 3350.114, SPSO: 4937.552 },
+  { scenario: 'E6', PPO: 4609.501, Hungarian: 3714.336, SPSO: 5516.105 }
 ];
 
 const keys = ['Hungarian', 'PPO', 'SPSO'];

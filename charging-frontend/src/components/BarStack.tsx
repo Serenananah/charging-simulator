@@ -25,20 +25,20 @@ const colors = ['#6c5efb', '#c998ff']; // Completion / Timeout
 
 const allData = {
   Hungarian: [
-    { scenario: 'E1', Completion: 85.5, Timeout: 14.5 },
-    { scenario: 'E2', Completion: 39.37, Timeout: 60.63 },
-    { scenario: 'E3', Completion: 41.8, Timeout: 58.2 },
-    { scenario: 'E4', Completion: 47.5, Timeout: 52.5 },
-    { scenario: 'E5', Completion: 72.05, Timeout: 27.95 },
-    { scenario: 'E6', Completion: 42.62, Timeout: 57.38 },
+    { scenario: 'E1', Completion: 97.00, Timeout: 3.00 },
+    { scenario: 'E2', Completion: 62.91, Timeout: 37.09 },
+    { scenario: 'E3', Completion: 62.05, Timeout: 37.95 },
+    { scenario: 'E4', Completion: 70.22, Timeout: 29.78 },
+    { scenario: 'E5', Completion: 88.87, Timeout: 11.13 },
+    { scenario: 'E6', Completion: 63.87, Timeout: 36.13 },
   ],
   PPO: [
-    { scenario: 'E1', Completion: 98, Timeout: 2 },
-    { scenario: 'E2', Completion: 40.43, Timeout: 59.57 },
-    { scenario: 'E3', Completion: 49.78, Timeout: 50.22 },
-    { scenario: 'E4', Completion: 48.42, Timeout: 51.58 },
-    { scenario: 'E5', Completion: 98.86, Timeout: 1.14 },
-    { scenario: 'E6', Completion: 53.87, Timeout: 46.13 },
+    { scenario: 'E1', Completion: 100.00, Timeout: 0.00 },
+    { scenario: 'E2', Completion: 65.42, Timeout: 34.58 },
+    { scenario: 'E3', Completion: 67.75, Timeout: 32.25 },
+    { scenario: 'E4', Completion: 81.83, Timeout: 18.17 },
+    { scenario: 'E5', Completion: 99.77, Timeout: 0.23 },
+    { scenario: 'E6', Completion: 71.64, Timeout: 28.36 },
   ],
   SPSO: [
     { scenario: 'E1', Completion: 90.149, Timeout: 9.78 },
