@@ -42,7 +42,7 @@ def init_map():
 
         # 策略名称标准化
         if strategy in ["s_pso_d", "spso_d", "spso"]:
-            strategy = "spso"  # 统一为 spso
+            strategy = "hspso"  # 统一为 spso
 
         # 更新状态参数
         state.update({
@@ -274,7 +274,7 @@ def next_step():
                     r.assign(task, path)
                     break
 
-    elif state["strategy"] == "spso" or state["strategy"] == "s_pso_d":  # <-- SPSO 分支
+    elif state["strategy"] == "hspso" or state["strategy"] == "hs_pso_d":  # <-- SPSO 分支
         #  仅在有空闲且电量充足的机器人时触发调度器
         if should_dispatch(state["robots"]):
             # 使用优化版本的混合SPSO
@@ -364,9 +364,9 @@ def set_strategy():
 
     # 策略名称标准化
     if strategy in ["s_pso_d", "spso_d", "spso"]:
-        strategy = "spso"  # 统一为 spso
+        strategy = "hspso"  # 统一为 hspso
 
-    if strategy in ["hungarian", "ppo", "spso"]:
+    if strategy in ["hungarian", "ppo", "hspso"]:
         state["strategy"] = strategy
         return jsonify({"message": f"调度策略已设置为: {strategy}", "success": True})
     else:

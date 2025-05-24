@@ -16,12 +16,12 @@ import {
 export const background = '#f3f3f3';
 
 const data = [
-  { x: 'E1', PPO: 8.01, Hungarian: 25.26, SPSO: 28.026 },
-  { x: 'E2', PPO: 20.90, Hungarian: 26.84, SPSO: 24.769 },
-  { x: 'E3', PPO: 15.21, Hungarian: 26.81, SPSO: 33.259 },
-  { x: 'E4', PPO: 23.48, Hungarian: 26.48, SPSO: 27.853 },
-  { x: 'E5', PPO: 12.85, Hungarian: 28.94, SPSO: 25.976 },
-  { x: 'E6', PPO: 18.34, Hungarian: 28.68, SPSO: 32.862 },
+  { x: 'E1', PPO: 8.01, Hungarian: 25.26, HSPSO: 28.026 },
+  { x: 'E2', PPO: 20.90, Hungarian: 26.84, HSPSO: 24.769 },
+  { x: 'E3', PPO: 15.21, Hungarian: 26.81, HSPSO: 33.259 },
+  { x: 'E4', PPO: 23.48, Hungarian: 26.48, HSPSO: 27.853 },
+  { x: 'E5', PPO: 12.85, Hungarian: 28.94, HSPSO: 25.976 },
+  { x: 'E6', PPO: 18.34, Hungarian: 28.68, HSPSO: 32.862 },
 ];
 
 const xScale = scalePoint({
@@ -86,12 +86,12 @@ export default function ThresholdChart({ width, height, margin = defaultMargin }
             aboveAreaProps={{ fill: 'violet', fillOpacity: 0.2 }}
           />
 
-          {/* SPSO vs Hungarian (green) */}
+          {/* HSPSO vs Hungarian (green) */}
           <Threshold
-            id="spso-threshold"
+            id="hspso-threshold"
             data={data}
             x={d => xScale(d.x) ?? 0}
-            y0={d => yScale(d.SPSO) ?? 0}
+            y0={d => yScale(d.HSPSO) ?? 0}
             y1={d => yScale(d.Hungarian) ?? 0}
             clipAboveTo={0}
             clipBelowTo={yMax}
@@ -145,12 +145,12 @@ export default function ThresholdChart({ width, height, margin = defaultMargin }
             onMouseLeave={hideTooltip}
           />
 
-          {/* SPSO */}
+          {/* HSPSO */}
           <LinePath
             data={data}
             curve={curveBasis}
             x={d => xScale(d.x) ?? 0}
-            y={d => yScale(d.SPSO) ?? 0}
+            y={d => yScale(d.HSPSO) ?? 0}
             stroke="#2ca02c"
             strokeWidth={2}
             strokeDasharray="6,2"
@@ -159,7 +159,7 @@ export default function ThresholdChart({ width, height, margin = defaultMargin }
               const closest = data.find(d => Math.abs(xScale(d.x)! - (x - margin.left)) < 20);
               if (closest) {
                 showTooltip({
-                  tooltipData: { label: 'SPSO', x: closest.x, y: closest.SPSO },
+                  tooltipData: { label: 'SPSO', x: closest.x, y: closest.HSPSO },
                   tooltipLeft: x,
                   tooltipTop: y,
                 });
@@ -191,19 +191,19 @@ export default function ThresholdChart({ width, height, margin = defaultMargin }
           ))}
 
           {/*添加透明交互点来触发tooltip相应*/}
-          {/* SPSO tooltip points */}
+          {/* HSPSO tooltip points */}
           {data.map((d, i) => (
             <circle
               key={`spso-point-${i}`}
               cx={xScale(d.x) ?? 0}
-              cy={yScale(d.SPSO) ?? 0}
+              cy={yScale(d.HSPSO) ?? 0}
               r={10}
               fill="transparent"
               pointerEvents="all"
               onMouseMove={(event) => {
                 const { clientX, clientY } = event;
                 showTooltip({
-                  tooltipData: { label: 'SPSO', x: d.x, y: d.SPSO },
+                  tooltipData: { label: 'HSPSO', x: d.x, y: d.HSPSO },
                   tooltipLeft: clientX,
                   tooltipTop: clientY,
                 });
@@ -241,7 +241,7 @@ export default function ThresholdChart({ width, height, margin = defaultMargin }
           <text x={xScale('E6')!} y={yScale(data[5].PPO) - 10} fontSize={10} fontWeight="bold" fill="#ff7f0e">
             PPO
           </text>
-          <text x={xScale('E6')!} y={yScale(data[5].SPSO) - 10} fontSize={10} fontWeight="bold" fill="#2ca02c">
+          <text x={xScale('E6')!} y={yScale(data[5].HSPSO) - 10} fontSize={10} fontWeight="bold" fill="#2ca02c">
             SPSO
           </text>
         </Group>

@@ -20,7 +20,7 @@ const tooltipStyles = {
   color: 'white',
 };
 
-const strategies = ['Hungarian', 'PPO', 'SPSO'];
+const strategies = ['Hungarian', 'PPO', 'HSPSO'];
 const colors = ['#6c5efb', '#c998ff']; // Completion / Timeout
 
 const allData = {
@@ -40,7 +40,7 @@ const allData = {
     { scenario: 'E5', Completion: 99.77, Timeout: 0.23 },
     { scenario: 'E6', Completion: 71.64, Timeout: 28.36 },
   ],
-  SPSO: [
+  HSPSO: [
     { scenario: 'E1', Completion: 90.149, Timeout: 9.78 },
     { scenario: 'E2', Completion: 90.39, Timeout: 9.61 },
     { scenario: 'E3', Completion: 89.39, Timeout: 10.68 },

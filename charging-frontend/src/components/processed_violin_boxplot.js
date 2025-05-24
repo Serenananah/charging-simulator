@@ -259,7 +259,7 @@ export const violinBoxData = {
       ]
     }
   ],
-  "SPSO": [
+  "HSPSO": [
     {
       "scene": "E1",
       "min": 27.05,
